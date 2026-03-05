@@ -367,9 +367,13 @@ function QRScanner({onTrigger}){
   const[manualUrl,setManualUrl]=useState("");
   const[dragOver,setDragOver]=useState(false);
   const[preview,setPreview]=useState(null);
+  const[cameraOn,setCameraOn]=useState(false);
   const canvasRef=useRef(null);
+  const videoRef=useRef(null);
   const fileRef=useRef(null);
   const cameraRef=useRef(null);
+  const streamRef=useRef(null);
+  const rafRef=useRef(null);
 
   useEffect(()=>{
     if(window.jsQR){setLoaded(true);return;}
@@ -384,6 +388,83 @@ function QRScanner({onTrigger}){
   },[]);
 
   useEffect(()=>()=>{if(preview?.startsWith("blob:"))URL.revokeObjectURL(preview);},[preview]);
+  useEffect(()=>()=>{if(rafRef.current)cancelAnimationFrame(rafRef.current);if(streamRef.current)streamRef.current.getTracks().forEach(t=>t.stop());},[]);
+
+  const decodeFromCanvas=canvas=>{
+    if(!window.jsQR)return null;
+    const read=(c,w,h)=>{
+      const ctx=c.getContext("2d",{willReadFrequently:true});
+      const img=ctx.getImageData(0,0,w,h);
+      const qr=window.jsQR(img.data,w,h,{inversionAttempts:"attemptBoth"});
+      return qr?.data||null;
+    };
+    const w=canvas.width,h=canvas.height;
+    let data=read(canvas,w,h);
+    if(data)return data;
+    const scales=[0.75,0.5,0.35,0.25];
+    for(const s of scales){
+      const tw=Math.max(160,Math.round(w*s));
+      const th=Math.max(160,Math.round(h*s));
+      const t=document.createElement("canvas");
+      t.width=tw;t.height=th;
+      t.getContext("2d").drawImage(canvas,0,0,tw,th);
+      data=read(t,tw,th);
+      if(data)return data;
+    }
+    return null;
+  };
+
+  const stopCamera=()=>{
+    if(rafRef.current)cancelAnimationFrame(rafRef.current);
+    rafRef.current=null;
+    if(streamRef.current)streamRef.current.getTracks().forEach(t=>t.stop());
+    streamRef.current=null;
+    if(videoRef.current)videoRef.current.srcObject=null;
+    setCameraOn(false);
+  };
+
+  const startCamera=async()=>{
+    if(!navigator.mediaDevices?.getUserMedia){setStatus("Camera API not supported in this browser.");return;}
+    try{
+      stopCamera();
+      setRes(null);
+      setStatus("Opening camera...");
+      const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"}},audio:false});
+      streamRef.current=stream;
+      const video=videoRef.current;
+      video.srcObject=stream;
+      await video.play();
+      setCameraOn(true);
+      setStatus("Scanning live camera...");
+
+      const scanLoop=()=>{
+        if(!video.videoWidth||!video.videoHeight){rafRef.current=requestAnimationFrame(scanLoop);return;}
+        const canvas=canvasRef.current;
+        const max=960;
+        const ratio=Math.min(1,max/video.videoWidth);
+        canvas.width=Math.round(video.videoWidth*ratio);
+        canvas.height=Math.round(video.videoHeight*ratio);
+        const ctx=canvas.getContext("2d");
+        ctx.drawImage(video,0,0,canvas.width,canvas.height);
+        const decoded=decodeFromCanvas(canvas);
+        if(decoded){
+          const r=analyzeURL(decoded);
+          const snap=canvas.toDataURL("image/png");
+          setPreview(prev=>{if(prev?.startsWith("blob:"))URL.revokeObjectURL(prev);return snap;});
+          setRes({...r,raw:decoded});
+          setStatus("");
+          onTrigger(r.risk);
+          stopCamera();
+          return;
+        }
+        rafRef.current=requestAnimationFrame(scanLoop);
+      };
+      rafRef.current=requestAnimationFrame(scanLoop);
+    }catch(err){
+      setStatus("Camera access denied/unavailable. Use Upload Image or Take Photo fallback.");
+      stopCamera();
+    }
+  };
 
   const processImage=file=>{
     if(!file)return;
@@ -394,15 +475,16 @@ function QRScanner({onTrigger}){
       img.src=ev.target.result;
       img.onload=()=>{
         const canvas=canvasRef.current;
-        canvas.width=img.width;canvas.height=img.height;
+        const max=1800,ratio=Math.min(1,max/Math.max(img.width,img.height));
+        canvas.width=Math.round(img.width*ratio);canvas.height=Math.round(img.height*ratio);
         const ctx=canvas.getContext("2d");ctx.drawImage(img,0,0);
-        const imageData=ctx.getImageData(0,0,canvas.width,canvas.height);
         if(window.jsQR){
-          const code=window.jsQR(imageData.data,imageData.width,imageData.height,{inversionAttempts:"attemptBoth"});
-          if(code){const r=analyzeURL(code.data);setRes({...r,raw:code.data});setStatus("");onTrigger(r.risk);}
+          const decoded=decodeFromCanvas(canvas);
+          if(decoded){const r=analyzeURL(decoded);setRes({...r,raw:decoded});setStatus("");onTrigger(r.risk);}
           else setStatus("No QR code detected — try a clearer, well-lit photo.");
         }else setStatus("QR engine unavailable — paste URL manually below.");
       };
+      img.onerror=()=>setStatus("Could not read this image. Try another file.");
     };
     reader.readAsDataURL(file);
   };
@@ -413,22 +495,25 @@ function QRScanner({onTrigger}){
 
   return <div>
     <canvas ref={canvasRef} style={{display:"none"}}/>
+    <video ref={videoRef} muted playsInline style={{display:"none"}}/>
     <input ref={fileRef} type="file" accept="image/*" onChange={handleChange} style={{display:"none"}}/>
     <input ref={cameraRef} type="file" accept="image/*" capture="environment" onChange={handleChange} style={{display:"none"}}/>
 
     <Card style={{marginBottom:16}}>
-      <Label>Upload or capture a QR code image</Label>
+      <Label>Live camera scan, upload, or capture a QR code image</Label>
       <div
         onDragOver={e=>{e.preventDefault();setDragOver(true);}}
         onDragLeave={()=>setDragOver(false)}
         onDrop={e=>{e.preventDefault();setDragOver(false);const f=e.dataTransfer.files[0];if(f)processImage(f);}}
         onClick={()=>fileRef.current?.click()}
         style={{border:`2px dashed ${dragOver?"#6644ff":"#2a2a50"}`,borderRadius:10,padding:"36px 20px",textAlign:"center",background:dark?(dragOver?"#0d0a22":"#06060f"):(dragOver?"#f0eeff":"#f8f9ff"),transition:"all .2s",marginBottom:14,cursor:"pointer"}}>
-        {preview
+        {cameraOn
+          ?<video autoPlay muted playsInline ref={el=>{if(el&&videoRef.current&&videoRef.current.srcObject)el.srcObject=videoRef.current.srcObject;}} style={{maxHeight:160,width:"100%",objectFit:"cover",borderRadius:8,marginBottom:10,border:"1px solid #2a2a50"}}/>
+          :preview
           ?<img src={preview} alt="QR" style={{maxHeight:130,maxWidth:"100%",borderRadius:8,marginBottom:10,border:"1px solid #2a2a50",display:"block",margin:"0 auto 10px"}}/>
           :<div style={{fontSize:52,marginBottom:10}}>{loaded===false?"⏳":"🖼️"}</div>}
         <div style={{fontSize:13,color:"#6677aa"}}>
-          {loaded===false?"Loading QR engine...":dragOver?"Drop it here!":"Click to browse, or drag & drop a QR image"}
+          {loaded===false?"Loading QR engine...":cameraOn?"Live scan active — point camera at QR code":dragOver?"Drop it here!":"Click to browse, or drag & drop a QR image"}
         </div>
         {status&&<div style={{marginTop:12,fontSize:12,color:status==="Decoding..."?"#9977ff":status.startsWith("No")?"#ffcc00":"#ff6677",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
           {status==="Decoding..."&&<Spinner color="#9977ff" size={13}/>}{status}
@@ -442,12 +527,17 @@ function QRScanner({onTrigger}){
         </button>
         <button
           style={{...btnStyle("#00aa66"),flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}
+          onClick={e=>{e.stopPropagation();cameraOn?stopCamera():startCamera();}}>
+          {cameraOn?"⏹ Stop Camera":"📷 Start Camera"}
+        </button>
+        <button
+          style={{...btnStyle("#2288aa"),flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}
           onClick={e=>{e.stopPropagation();cameraRef.current?.click();}}>
-          📱 Take Photo
+          📱 Take Photo (Fallback)
         </button>
         {(preview||res)&&<button
           style={{...btnStyle("#1a1a30"),flex:"0 0 auto",border:"1px solid #ff335533",boxShadow:"none",color:"#ff6677"}}
-          onClick={e=>{e.stopPropagation();if(preview?.startsWith("blob:"))URL.revokeObjectURL(preview);setPreview(null);setRes(null);setStatus("");}}>
+          onClick={e=>{e.stopPropagation();stopCamera();if(preview?.startsWith("blob:"))URL.revokeObjectURL(preview);setPreview(null);setRes(null);setStatus("");}}>
           ✕ Clear
         </button>}
       </div>
