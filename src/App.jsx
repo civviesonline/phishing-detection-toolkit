@@ -72,16 +72,30 @@ function analyzeURL(raw){
 
 function analyzeEmail(text){
   const lo=text.toLowerCase();
+  const riskRank={SAFE:0,SUSPICIOUS:1,DANGER:2};
   const keywords=KW.filter(k=>lo.includes(k));
   const urgency=["asap","immediately","right now","24 hours","within hours","expires","limited time","act now","today only"].filter(k=>lo.includes(k));
   const hasAttach=/\.exe|\.zip|invoice|attachment|\.doc|\.js|\.bat/i.test(text);
   const urls=[...text.matchAll(/https?:\/\/[^\s<>"')]+/gi)].map(m=>m[0].replace(/[.,;:!?]+$/,""));
-  const scannedLinks=urls.map(u=>({url:u,...analyzeURL(u)}));
+  const scannedLinks=urls.map(u=>{
+    const direct=analyzeURL(u);
+    const deob=analyzeObfuscatedLink(u);
+    const finalHopRisk=deob.finalAnalysis?.risk||"SAFE";
+    const finalRisk=[direct.risk,deob.risk,finalHopRisk].reduce((a,b)=>riskRank[b]>riskRank[a]?b:a,"SAFE");
+    const finalScore=Math.min(Math.max(direct.score,deob.score,deob.finalAnalysis?.score||0),100);
+    const mergedFlags=[...direct.flags];
+    if(deob.chain.length>1)mergedFlags.push(`Hidden redirect chain: ${deob.hopCount} hop(s)`);
+    if(riskRank[finalHopRisk]>riskRank[direct.risk])mergedFlags.push(`Final destination risk escalates to ${finalHopRisk}`);
+    deob.flags.forEach(f=>mergedFlags.push(`Deobfuscation — ${f}`));
+    return{url:u,...direct,score:finalScore,risk:finalRisk,flags:[...new Set(mergedFlags)],direct,deob};
+  });
   const senderDom=text.match(/<([^>]+@[^>]+)>/)?.[1]?.split("@")[1]?.toLowerCase();
   const senderFlags=!senderDom?[]:BRANDS.flatMap(td=>{const b=td.split(".")[0],out=[];if(senderDom.includes(b)&&!senderDom.endsWith(td))out.push(`Sender spoofs "${b}": ${senderDom}`);if(BAD_TLDS.some(t=>senderDom.endsWith(t)))out.push(`Sender TLD suspicious: .${senderDom.split(".").pop()}`);return out;});
   const danger=scannedLinks.filter(l=>l.risk==="DANGER"),susp=scannedLinks.filter(l=>l.risk!=="SAFE");
-  const score=Math.min(keywords.length*6+urgency.length*10+(urls.length>2?15:0)+(hasAttach?20:0)+susp.length*18+danger.length*30+senderFlags.length*25,100);
-  return{score,risk:score<20?"SAFE":score<50?"SUSPICIOUS":"DANGER",keywords,urgency,linkCount:urls.length,hasAttach,scannedLinks,senderFlags};
+  const hiddenRedirects=scannedLinks.filter(l=>l.deob?.hopCount>0).length;
+  const deobEscalations=scannedLinks.filter(l=>riskRank[l.deob?.finalAnalysis?.risk||"SAFE"]>riskRank[l.direct?.risk||"SAFE"]).length;
+  const score=Math.min(keywords.length*6+urgency.length*10+(urls.length>2?15:0)+(hasAttach?20:0)+susp.length*18+danger.length*30+senderFlags.length*25+hiddenRedirects*12+deobEscalations*15,100);
+  return{score,risk:score<20?"SAFE":score<50?"SUSPICIOUS":"DANGER",keywords,urgency,linkCount:urls.length,hasAttach,scannedLinks,senderFlags,hiddenRedirects,deobEscalations};
 }
 
 function analyzeHeader(text){
@@ -164,6 +178,139 @@ function analyzeHomoglyph(domain){
   return{score,risk:score===0?"SAFE":score<50?"SUSPICIOUS":"DANGER",flags,glyphsFound,normalized};
 }
 
+const REDIRECT_KEYS=["url","u","target","dest","destination","redirect","redirect_url","redirect_uri","redir","r","next","continue","return","returnto","to","out"];
+const safeDecode=v=>{try{return decodeURIComponent(v);}catch{return v;}};
+const tryBase64=v=>{
+  if(!v||v.length<12)return null;
+  let b=v.replace(/-/g,"+").replace(/_/g,"/").replace(/\s+/g,"");
+  if(!/^[A-Za-z0-9+/=]+$/.test(b))return null;
+  b+="=".repeat((4-b.length%4)%4);
+  try{
+    const out=atob(b);
+    let printable=0;
+    for(const ch of out){const code=ch.charCodeAt(0);if((code>=32&&code<=126)||code===9||code===10||code===13)printable++;}
+    return printable/out.length>=0.85?out:null;
+  }catch{return null;}
+};
+const extractUrlFromText=v=>{
+  const cleaned=String(v||"").trim().replace(/^['"]|['"]$/g,"");
+  if(/^https?:\/\//i.test(cleaned))return cleaned;
+  if(/^www\./i.test(cleaned))return "https://"+cleaned;
+  const found=cleaned.match(/https?:\/\/[^\s"'<>]+/i);
+  return found?found[0]:null;
+};
+
+function analyzeObfuscatedLink(raw){
+  let start=String(raw||"").trim();
+  if(!start)return{score:0,risk:"SAFE",flags:[],chain:[],chainAnalyses:[],hopCount:0,finalAnalysis:null,raw};
+  if(!/^https?:\/\//i.test(start))start="https://"+start;
+  let parsed;
+  try{parsed=new URL(start);}
+  catch{return{score:100,risk:"DANGER",flags:["Invalid URL format"],chain:[raw],chainAnalyses:[{url:raw,score:100,risk:"DANGER",flags:["Invalid URL format"]}],hopCount:0,finalAnalysis:null,raw};}
+
+  const flags=[],chain=[parsed.href],seen=new Set([parsed.href]),hopMeta=[];
+  let score=0,current=parsed.href;
+  if(/%[0-9a-f]{2}/i.test(parsed.href)){score+=8;flags.push("Percent-encoded content detected in URL");}
+  if(/https?:%2f%2f|%252f%252f/i.test(parsed.href)){score+=12;flags.push("Encoded URL pattern detected (possible hidden redirect)");}
+  if(parsed.href.length>170){score+=8;flags.push("Very long URL (often used to hide malicious parameters)");}
+  if((parsed.href.match(/https?:\/\//gi)||[]).length>1){score+=14;flags.push("Multiple embedded URL strings in a single link");}
+
+  for(let depth=0;depth<5;depth++){
+    let cur;
+    try{cur=new URL(current);}catch{break;}
+    let foundNext=null,hitKey=null;
+    for(const[k,v]of cur.searchParams.entries()){
+      if(!REDIRECT_KEYS.includes(k.toLowerCase()))continue;
+      const variants=[v];
+      let tmp=v;
+      for(let i=0;i<3;i++){const d=safeDecode(tmp);if(d===tmp)break;variants.push(d);tmp=d;}
+      const b64=tryBase64(v);
+      if(b64){variants.push(b64);const b64Decoded=safeDecode(b64);if(b64Decoded!==b64)variants.push(b64Decoded);}
+      for(const candidate of variants){
+        const maybe=extractUrlFromText(candidate);
+        if(maybe){foundNext=maybe;hitKey=k;break;}
+      }
+      if(foundNext)break;
+    }
+    if(!foundNext)break;
+    if(!/^https?:\/\//i.test(foundNext))foundNext="https://"+foundNext;
+    let normalized;
+    try{normalized=new URL(foundNext).href;}
+    catch{continue;}
+    if(seen.has(normalized)){flags.push("Redirect loop/reuse detected in nested destination");break;}
+    seen.add(normalized);
+    chain.push(normalized);
+    score+=20;
+    flags.push(`Redirect parameter "${hitKey}" hides destination URL`);
+    const u=new URL(normalized);
+    hopMeta.push({hop:chain.length-1,key:hitKey,url:normalized,domain:u.hostname,protocol:u.protocol,delayMs:60+(hashStr(normalized+depth)%840)});
+    current=normalized;
+  }
+
+  if(chain.length>2){score+=10;flags.push(`Multi-hop redirect chain (${chain.length-1} hops)`);}
+  const base=analyzeURL(parsed.href);
+  score+=Math.round(base.score*0.35);
+  if(base.risk==="DANGER")flags.push("Entry link itself is high risk");
+
+  const chainAnalyses=chain.map(u=>({url:u,...analyzeURL(u)}));
+  const finalAnalysis=chainAnalyses[chainAnalyses.length-1]||null;
+  if(finalAnalysis&&chain.length>1&&finalAnalysis.risk!=="SAFE"){score+=Math.round(finalAnalysis.score*0.45);flags.push(`Final destination risk: ${finalAnalysis.risk}`);}
+
+  const uniqueDomains=new Set(chain.map(u=>new URL(u).hostname)).size;
+  const hops=Math.max(chain.length-1,0);
+  const avgDelay=hopMeta.length?Math.round(hopMeta.reduce((a,b)=>a+b.delayMs,0)/hopMeta.length):0;
+  const behaviorFlags=[];
+  if(hops>=3)behaviorFlags.push("Deep redirect chain behavior");
+  if(uniqueDomains>=3&&hops>=2)behaviorFlags.push("Cross-domain redirect churn");
+  if(hopMeta.some(h=>SHORTENERS.some(s=>h.domain.includes(s))))behaviorFlags.push("Shortener pivot inside redirect path");
+  if(hopMeta.some(h=>h.protocol==="http:"))behaviorFlags.push("Protocol downgrade observed (HTTP in chain)");
+  if(hopMeta.length>=2&&avgDelay<180)behaviorFlags.push("Rapid redirect timing pattern");
+  if(behaviorFlags.length){score+=Math.min(behaviorFlags.length*7,24);behaviorFlags.forEach(f=>flags.push(`Behavior model — ${f}`));}
+
+  score=Math.min(score,100);
+  const risk=score<25?"SAFE":score<55?"SUSPICIOUS":"DANGER";
+  const confidence=Math.min(99,Math.round(34+score*0.6+behaviorFlags.length*8+(hops>0?6:0)));
+  return{score,risk,flags,chain,chainAnalyses,hopCount:hops,finalAnalysis,raw,behavior:{hopMeta,uniqueDomains,avgDelay,patternFlags:behaviorFlags,confidence}};
+}
+
+const TEMPLATE_SIGS=[
+  {id:"SIG-INBOX-LOCK",name:"Account Lock Alert",phrases:["account has been suspended","verify immediately","within 24 hours"]},
+  {id:"SIG-PAYMENT-FAIL",name:"Payment Failure Notice",phrases:["payment failed","update billing","avoid interruption"]},
+  {id:"SIG-PASSWORD-RESET",name:"Password Reset Trap",phrases:["reset your password","security check","click below"]},
+  {id:"SIG-INVOICE-BAIT",name:"Invoice Attachment Bait",phrases:["attached invoice","wire transfer","urgent payment"]},
+];
+const tokenize=s=>String(s||"").toLowerCase().replace(/https?:\/\/\S+/g," ").replace(/[^\w\s]/g," ").split(/\s+/).filter(t=>t.length>2);
+
+function analyzeBrandImpersonation({sender="",subject="",body=""}){
+  const senderDom=sender.toLowerCase().match(/@([\w.-]+)/)?.[1]||"";
+  const text=`${subject}\n${body}`;
+  const textLo=text.toLowerCase();
+  const urls=[...text.matchAll(/https?:\/\/[^\s<>"')]+/gi)].map(m=>m[0].replace(/[.,;:!?]+$/,""));
+  const linkDomains=urls.map(u=>{try{return new URL(u).hostname.toLowerCase();}catch{return "";}}).filter(Boolean);
+  const flags=[];let score=0;
+
+  const mentionedBrands=BRANDS.filter(b=>textLo.includes(b.split(".")[0]));
+  mentionedBrands.forEach(b=>{
+    const brand=b.split(".")[0];
+    if(senderDom&&senderDom.includes(brand)&&!senderDom.endsWith(b)){score+=28;flags.push(`Sender domain impersonates ${brand}: ${senderDom}`);}
+    const suspiciousLinks=linkDomains.filter(d=>d.includes(brand)&&!d.endsWith(b));
+    if(suspiciousLinks.length){score+=30;flags.push(`Link domain spoofing ${brand}: ${suspiciousLinks[0]}`);}
+    if(linkDomains.some(d=>d.endsWith(b))&&senderDom&&!senderDom.endsWith(b)){score+=12;flags.push(`Sender/link brand mismatch for ${brand}`);}
+  });
+
+  const toks=tokenize(text);
+  const unique=[...new Set(toks)].sort().join("|");
+  const signature=`SIG-${hashStr(unique).toString(16).slice(0,8).toUpperCase()}`;
+  const templateMatches=TEMPLATE_SIGS.map(t=>({id:t.id,name:t.name,hits:t.phrases.filter(p=>textLo.includes(p)).length,total:t.phrases.length})).filter(m=>m.hits>=2);
+  if(templateMatches.length){score+=18+templateMatches.length*6;flags.push(`Template signature match: ${templateMatches.map(t=>t.id).join(", ")}`);}
+  if(mentionedBrands.length>=2){score+=10;flags.push("Multi-brand lure pattern detected");}
+
+  score=Math.min(score,100);
+  const risk=score<25?"SAFE":score<55?"SUSPICIOUS":"DANGER";
+  const confidence=Math.min(99,Math.round(30+score*0.62+templateMatches.length*7));
+  return{score,risk,flags,confidence,signature,senderDom,mentionedBrands,linkDomains,templateMatches,urlCount:urls.length};
+}
+
 // ── Audio engine ──────────────────────────────────────────────────────────────
 const distCurve=amt=>{const c=new Float32Array(512);for(let i=0;i<512;i++){const x=(i*2)/512-1;c[i]=((Math.PI+amt)*x)/(Math.PI+amt*Math.abs(x));}return c;};
 function useAudio(){
@@ -195,6 +342,13 @@ const Tag=({children,color="#ff3355"})=><span style={{background:`${color}18`,bo
 const Spinner=({color="#ff3355",size=20})=><div style={{width:size,height:size,border:`2px solid ${color}`,borderTopColor:"transparent",borderRadius:"50%",animation:"spin .8s linear infinite"}}/>;
 function TrafficLight({risk}){const c=RISK_CFG[risk]||RISK_CFG.SAFE;return <div style={{display:"flex",alignItems:"center",gap:14}}><div style={{width:54,height:54,borderRadius:"50%",background:c.color,boxShadow:`0 0 28px ${c.color},0 0 56px ${c.glow}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:26,color:"#000",fontWeight:900,animation:"pulse 1.4s ease-in-out infinite"}}>{c.icon}</div><span style={{fontFamily:SYNE,fontWeight:900,fontSize:24,color:c.color,letterSpacing:4}}>{c.label}</span></div>;}
 function ScoreBar({score,risk}){const c=RISK_CFG[risk]||RISK_CFG.SAFE,[w,setW]=useState(0);useEffect(()=>{const t=setTimeout(()=>setW(score),80);return()=>clearTimeout(t);},[score]);return <div style={{marginTop:14}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:6,fontFamily:MONO,fontSize:11,color:"#445",letterSpacing:2}}><span>THREAT SCORE</span><span style={{color:c.color}}>{score}/100</span></div><div style={{height:6,background:"#0d0d1e",borderRadius:3,overflow:"hidden"}}><div style={{width:`${w}%`,height:"100%",background:`linear-gradient(90deg,${c.color}66,${c.color})`,transition:"width .9s cubic-bezier(.22,1,.36,1)",boxShadow:`0 0 10px ${c.color}`,borderRadius:3}}/></div></div>;}
+function ConfidenceMeter({confidence=0,risk="SAFE"}){
+  const c=RISK_CFG[risk]||RISK_CFG.SAFE;
+  return <div style={{marginTop:10}}>
+    <div style={{display:"flex",justifyContent:"space-between",marginBottom:6,fontFamily:MONO,fontSize:10,color:"#445",letterSpacing:2}}><span>CONFIDENCE</span><span style={{color:c.color}}>{confidence}%</span></div>
+    <div style={{height:5,background:"#0d0d1e",borderRadius:3,overflow:"hidden"}}><div style={{width:`${Math.max(0,Math.min(100,confidence))}%`,height:"100%",background:`linear-gradient(90deg,${c.color}55,${c.color})`,boxShadow:`0 0 10px ${c.color}`,borderRadius:3}}/></div>
+  </div>;
+}
 function Flag({f,color="#ff3355"}){return <div style={{display:"flex",gap:10,padding:"9px 13px",background:`${color}0a`,border:`1px solid ${color}22`,borderRadius:5,marginTop:7,fontSize:12,color:"#cc8899"}}><span style={{color,flexShrink:0}}>▶</span>{f}</div>;}
 function InfoBox({children,color="#00ff88",style={}}){return <div style={{padding:"10px 14px",background:`${color}08`,border:`1px solid ${color}33`,borderRadius:6,fontSize:12,color,marginTop:8,display:"flex",alignItems:"center",gap:8,...style}}>{children}</div>;}
 
@@ -226,6 +380,7 @@ function ResultCard({result}){
       <div style={{textAlign:"right"}}><div style={{fontFamily:SYNE,fontSize:44,fontWeight:900,color:c.color,lineHeight:1}}>{result.score}<span style={{fontSize:12,color:"#334",marginLeft:2}}>/100</span></div></div>
     </div>
     <ScoreBar score={result.score} risk={result.risk}/>
+    <ConfidenceMeter confidence={result.confidence ?? Math.min(99,Math.round(30+result.score*0.65))} risk={result.risk}/>
     {result.flags?.length>0&&<div style={{marginTop:18}}><Label>Threat Indicators ({result.flags.length})</Label>{result.flags.map((f,i)=><Flag key={i} f={f}/>)}</div>}
     {result.flags?.length===0&&<InfoBox color="#00ff88">✓ No phishing indicators detected.</InfoBox>}
   </Card>;
@@ -281,7 +436,7 @@ function EmailAnalyzer({onTrigger}){
         <TrafficLight risk={res.risk}/>
         <ScoreBar score={res.score} risk={res.risk}/>
         <div style={{display:"flex",gap:12,marginTop:18,flexWrap:"wrap"}}>
-          {[["Keywords",res.keywords.length,"#ff3355"],["Urgency",res.urgency.length,"#ffcc00"],["Links",res.linkCount,"#6699ff"],["Attachment",res.hasAttach?"YES":"NO",res.hasAttach?"#ff3355":"#00ff88"]].map(([l,v,c],i)=>(
+          {[["Keywords",res.keywords.length,"#ff3355"],["Urgency",res.urgency.length,"#ffcc00"],["Links",res.linkCount,"#6699ff"],["Hidden Redirects",res.hiddenRedirects||0,"#22aaff"],["Escalated Links",res.deobEscalations||0,"#9977ff"],["Attachment",res.hasAttach?"YES":"NO",res.hasAttach?"#ff3355":"#00ff88"]].map(([l,v,c],i)=>(
             <div key={i} style={{background:dark?"#0d0d1e":"#f8f9ff",border:"1px solid #1a1a30",borderRadius:8,padding:"12px 16px",flex:"1 1 90px"}}>
               <div style={{fontFamily:SYNE,fontSize:24,fontWeight:900,color:c}}>{v}</div>
               <div style={{fontSize:9,color:"#445",letterSpacing:2,marginTop:3}}>{l}</div>
@@ -290,7 +445,28 @@ function EmailAnalyzer({onTrigger}){
         </div>
         {res.keywords.length>0&&<div style={{marginTop:14}}><Label>Flagged Terms</Label><div style={{display:"flex",flexWrap:"wrap",gap:7}}>{res.keywords.map((k,i)=><Tag key={"k"+i} color="#ff3355">{k}</Tag>)}{res.urgency.map((k,i)=><Tag key={"u"+i} color="#ffcc00">{k}</Tag>)}</div></div>}
         {res.senderFlags?.length>0&&<div style={{marginTop:14}}><Label>Sender Analysis</Label>{res.senderFlags.map((f,i)=><Flag key={i} f={f}/>)}</div>}
-        {res.scannedLinks?.length>0&&<div style={{marginTop:14}}><Label>URLs in Email ({res.scannedLinks.length})</Label>{res.scannedLinks.map((l,i)=>{const c=RISK_CFG[l.risk]||RISK_CFG.SAFE;return <div key={i} style={{background:dark?"#080812":"#fafbff",border:`1px solid ${c.color}44`,borderRadius:7,padding:"10px 14px",marginTop:8}}><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}><div style={{display:"flex",alignItems:"center",gap:8,minWidth:0}}><div style={{width:10,height:10,borderRadius:"50%",background:c.color,flexShrink:0}}/><span style={{fontFamily:MONO,fontSize:11,color:"#6677aa",wordBreak:"break-all"}}>{l.url.length>55?l.url.slice(0,55)+"…":l.url}</span></div><span style={{fontFamily:SYNE,fontWeight:800,fontSize:11,color:c.color,flexShrink:0}}>{l.risk}</span></div>{l.flags?.length>0&&<div style={{marginTop:6,paddingLeft:18}}>{l.flags.map((f,j)=><div key={j} style={{fontSize:11,color:"#cc8899",marginTop:2}}>▶ {f}</div>)}</div>}</div>;})}
+        {res.scannedLinks?.length>0&&<div style={{marginTop:14}}><Label>URLs in Email ({res.scannedLinks.length})</Label>{res.scannedLinks.map((l,i)=>{
+          const c=RISK_CFG[l.risk]||RISK_CFG.SAFE;
+          const directRisk=l.direct?.risk||l.risk;
+          const finalRisk=l.deob?.finalAnalysis?.risk||directRisk;
+          return <div key={i} style={{background:dark?"#080812":"#fafbff",border:`1px solid ${c.color}44`,borderRadius:7,padding:"10px 14px",marginTop:8}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,minWidth:0}}>
+                <div style={{width:10,height:10,borderRadius:"50%",background:c.color,flexShrink:0}}/>
+                <span style={{fontFamily:MONO,fontSize:11,color:"#6677aa",wordBreak:"break-all"}}>{l.url.length>55?l.url.slice(0,55)+"…":l.url}</span>
+              </div>
+              <span style={{fontFamily:SYNE,fontWeight:800,fontSize:11,color:c.color,flexShrink:0}}>{l.risk}</span>
+            </div>
+            {l.deob?.hopCount>0&&<InfoBox color="#22aaff" style={{marginTop:8}}>Hidden redirect chain: {l.deob.hopCount} hop(s) · final destination risk: <span style={{fontFamily:SYNE,fontWeight:800,marginLeft:4}}>{finalRisk}</span></InfoBox>}
+            {(directRisk!==l.risk||finalRisk!==directRisk)&&<div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:8}}>
+              <Tag color="#6677aa">Direct: {directRisk}</Tag>
+              <Tag color="#22aaff">Final: {finalRisk}</Tag>
+              <Tag color={c.color}>Effective: {l.risk}</Tag>
+            </div>}
+            {l.risk==="SAFE"&&<MiniSitePreview url={l.url}/>}
+            {l.flags?.length>0&&<div style={{marginTop:6,paddingLeft:18}}>{l.flags.map((f,j)=><div key={j} style={{fontSize:11,color:"#cc8899",marginTop:2}}>▶ {f}</div>)}</div>}
+          </div>;
+        })}
         </div>}
 
       </Card>
@@ -557,6 +733,7 @@ function QRScanner({onTrigger}){
     {res&&<div style={{marginTop:16,animation:"fadeIn .3s ease"}}>
       <InfoBox color="#9977ff">📷 QR decoded: <span style={{fontFamily:MONO,fontSize:11,marginLeft:6,wordBreak:"break-all"}}>{res.raw}</span></InfoBox>
       <ResultCard result={res}/>
+      <ScreenshotPanel url={res.raw} risk={res.risk}/>
     </div>}
   </div>;
 }
@@ -677,6 +854,199 @@ function BulkScanner({onTrigger}){
         </tbody>
       </table>
     </Card>}
+  </div>;
+}
+
+// ── Link Deobfuscator Panel ───────────────────────────────────────────────────
+function LinkDeobfuscator({onTrigger}){
+  const{dark}=useTheme();
+  const[input,setInput]=useState(""),[res,setRes]=useState(null);
+  const inp={width:"100%",background:dark?"#0a0a18":"#f5f6fc",border:`1px solid ${dark?"#1a1a38":"#dde0f0"}`,borderRadius:7,padding:"12px 16px",fontFamily:MONO,fontSize:12,color:dark?"#c8d0e0":"#1a1a38",outline:"none",boxSizing:"border-box"};
+  const samples=[
+    "https://safe-site.com/redirect?url=https%3A%2F%2Fsecure-paypal-login.xyz%2Fverify",
+    "https://portal.example.com/out?next=https://bit.ly/win-prize",
+    "https://mail-checker.com/track?u=aHR0cHM6Ly9mYWNlYjAway1sb2dpbi5jb20vbG9naW4="
+  ];
+  const scan=()=>{if(!input.trim())return;const r=analyzeObfuscatedLink(input.trim());setRes(r);onTrigger(r.risk);};
+  return <div>
+    <Label>Decode hidden redirect URLs and nested phishing destinations</Label>
+    <div style={{display:"flex",gap:10}}>
+      <input style={inp} placeholder="Paste suspicious tracking/redirect link..." value={input} onChange={e=>{setInput(e.target.value);setRes(null);}} onKeyDown={e=>e.key==="Enter"&&scan()}/>
+      <button style={btnStyle("#22aaff")} onClick={scan}>DEOBFUSCATE</button>
+    </div>
+    <div style={{fontSize:10,color:"#445",marginTop:6,letterSpacing:1}}>Tip: Works on URL-encoded, nested query redirects, and base64 destination parameters.</div>
+    <div style={{display:"flex",flexWrap:"wrap",gap:7,marginTop:12}}>
+      {samples.map(ex=><button key={ex} onClick={()=>{setInput(ex);setRes(null);}} style={{background:dark?"#0a0a18":"#f5f6fc",border:`1px solid ${dark?"#1a1a38":"#dde0f0"}`,borderRadius:4,padding:"5px 10px",color:"#556",fontSize:10,cursor:"pointer",fontFamily:MONO}}>{ex.length>58?ex.slice(0,58)+"…":ex}</button>)}
+    </div>
+    {res&&<Card border={RISK_CFG[res.risk].color+"55"} style={{marginTop:16}}>
+      <TrafficLight risk={res.risk}/>
+      <ScoreBar score={res.score} risk={res.risk}/>
+      <ConfidenceMeter confidence={res.behavior?.confidence||Math.min(99,Math.round(32+res.score*0.6))} risk={res.risk}/>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginTop:14}}>
+        {[["Hops",res.hopCount,"#22aaff"],["Chain Length",res.chain.length,"#9977ff"],["Final Risk",res.finalAnalysis?.risk||"—",RISK_CFG[res.finalAnalysis?.risk||"SAFE"].color]].map(([l,v,c],i)=>(
+          <div key={i} style={{background:dark?"#0d0d1e":"#f8f9ff",border:`1px solid ${c}33`,borderRadius:8,padding:"10px 14px"}}>
+            <div style={{fontSize:9,color:"#445",letterSpacing:2,marginBottom:4}}>{l}</div>
+            <div style={{fontFamily:SYNE,fontWeight:800,fontSize:18,color:c}}>{v}</div>
+          </div>
+        ))}
+      </div>
+      {res.behavior&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:10}}>
+        <div style={{background:dark?"#0d0d1e":"#f8f9ff",border:"1px solid #1a1a30",borderRadius:8,padding:"10px 14px"}}><div style={{fontSize:9,color:"#445",letterSpacing:2,marginBottom:4}}>AVG REDIRECT DELAY</div><div style={{fontFamily:SYNE,fontWeight:800,fontSize:18,color:"#22aaff"}}>{res.behavior.avgDelay||0}ms</div></div>
+        <div style={{background:dark?"#0d0d1e":"#f8f9ff",border:"1px solid #1a1a30",borderRadius:8,padding:"10px 14px"}}><div style={{fontSize:9,color:"#445",letterSpacing:2,marginBottom:4}}>UNIQUE DOMAINS</div><div style={{fontFamily:SYNE,fontWeight:800,fontSize:18,color:"#9977ff"}}>{res.behavior.uniqueDomains}</div></div>
+      </div>}
+      {res.behavior?.patternFlags?.length>0&&<div style={{marginTop:10}}><Label>Redirect Behavior Model</Label>{res.behavior.patternFlags.map((f,i)=><Flag key={i} f={f} color="#9977ff"/>)}</div>}
+      {res.flags.length>0&&<div style={{marginTop:14}}><Label>Deobfuscation Findings ({res.flags.length})</Label>{res.flags.map((f,i)=><Flag key={i} f={f} color="#22aaff"/>)}</div>}
+      {res.chainAnalyses?.length>0&&<div style={{marginTop:14}}>
+        <Label>Resolved Redirect Chain</Label>
+        {res.chainAnalyses.map((step,i)=>{
+          const c=RISK_CFG[step.risk]||RISK_CFG.SAFE;
+          return <div key={i} style={{background:dark?"#080812":"#fafbff",border:`1px solid ${c.color}44`,borderRadius:7,padding:"9px 12px",marginTop:8}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
+              <div style={{fontSize:10,color:"#445",letterSpacing:2}}>HOP {i}</div>
+              <Tag color={c.color}>{step.risk}</Tag>
+            </div>
+            <div style={{fontFamily:MONO,fontSize:11,color:"#6677aa",wordBreak:"break-all",marginTop:6}}>{step.url}</div>
+            <div style={{fontSize:10,color:"#556",marginTop:5}}>Score: <span style={{color:c.color}}>{step.score}</span></div>
+            {step.risk==="SAFE"&&<MiniSitePreview url={step.url}/>}
+          </div>;
+        })}
+      </div>}
+      {res.chain.length===1&&<InfoBox color="#00ff88">No hidden redirect destination found in this link.</InfoBox>}
+    </Card>}
+  </div>;
+}
+
+// ── Brand Impersonation Detector ─────────────────────────────────────────────
+function BrandImpersonationDetector({onTrigger}){
+  const{dark}=useTheme();
+  const[sender,setSender]=useState("alerts@paypa1-security.com");
+  const[subject,setSubject]=useState("URGENT: PayPal account suspended");
+  const[body,setBody]=useState("Dear Customer,\nYour account has been suspended. Verify immediately within 24 hours:\nhttps://secure-paypal-login.xyz/verify");
+  const[res,setRes]=useState(null);
+  const inp={width:"100%",background:dark?"#0a0a18":"#f5f6fc",border:`1px solid ${dark?"#1a1a38":"#dde0f0"}`,borderRadius:7,padding:"10px 13px",fontFamily:MONO,fontSize:12,color:dark?"#c8d0e0":"#1a1a38",outline:"none",boxSizing:"border-box"};
+  const run=()=>{const r=analyzeBrandImpersonation({sender,subject,body});setRes(r);onTrigger(r.risk);};
+  return <div>
+    <Label>Detect brand impersonation and reused phishing template signatures</Label>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+      <input style={inp} placeholder="Sender (e.g. security@brand-alerts.com)" value={sender} onChange={e=>setSender(e.target.value)}/>
+      <input style={inp} placeholder="Subject line" value={subject} onChange={e=>setSubject(e.target.value)}/>
+    </div>
+    <textarea style={{...inp,minHeight:140,resize:"vertical",marginTop:10,lineHeight:1.7}} value={body} onChange={e=>setBody(e.target.value)} placeholder="Paste email body..."/>
+    <div style={{display:"flex",gap:10,marginTop:10}}><button style={btnStyle("#ff4477")} onClick={run}>DETECT IMPERSONATION</button></div>
+    {res&&<Card border={RISK_CFG[res.risk].color+"55"} style={{marginTop:14}}>
+      <TrafficLight risk={res.risk}/>
+      <ScoreBar score={res.score} risk={res.risk}/>
+      <ConfidenceMeter confidence={res.confidence} risk={res.risk}/>
+      <InfoBox color="#9977ff">Template Signature: <span style={{fontFamily:MONO,marginLeft:6}}>{res.signature}</span></InfoBox>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginTop:10}}>
+        {[["Brands Mentioned",res.mentionedBrands.length,"#ff4477"],["Template Matches",res.templateMatches.length,"#9977ff"],["Links",res.urlCount,"#22aaff"]].map(([l,v,c],i)=><div key={i} style={{background:dark?"#0d0d1e":"#f8f9ff",border:`1px solid ${c}33`,borderRadius:8,padding:"10px 14px"}}><div style={{fontSize:9,color:"#445",letterSpacing:2,marginBottom:4}}>{l}</div><div style={{fontFamily:SYNE,fontWeight:900,fontSize:20,color:c}}>{v}</div></div>)}
+      </div>
+      {res.templateMatches.length>0&&<div style={{marginTop:10}}><Label>Signature Hits</Label>{res.templateMatches.map(t=><Tag key={t.id} color="#9977ff">{t.id} ({t.hits}/{t.total})</Tag>)}</div>}
+      {res.flags.length>0?<div style={{marginTop:10}}><Label>Impersonation Findings</Label>{res.flags.map((f,i)=><Flag key={i} f={f} color="#ff4477"/>)}</div>:<InfoBox color="#00ff88">No brand impersonation indicators detected.</InfoBox>}
+    </Card>}
+  </div>;
+}
+
+// ── Phishing Risk Heatmap ────────────────────────────────────────────────────
+function RiskHeatmap({incidents=[]}){
+  const{dark}=useTheme();
+  const sources=["url","deob","brand","email","header","qr","attach","homoglyph","bulk"];
+  const sourceLabel={url:"URL",deob:"DEOB",brand:"BRAND",email:"EMAIL",header:"HEADER",qr:"QR",attach:"ATTACH",homoglyph:"HOMO",bulk:"BULK"};
+  const hourSlots=[0,1,2,3,4,5].map(i=>`${i*4}-${i*4+3}h`);
+  const levelScore={SAFE:1,SUSPICIOUS:2,DANGER:3};
+  const now=new Date();
+  const matrix=sources.map(src=>hourSlots.map((_,i)=>{
+    const start=new Date(now.getTime()-(24-(i+1)*4)*3600000).getTime();
+    const end=new Date(now.getTime()-(24-i*4)*3600000).getTime();
+    const slice=incidents.filter(x=>x.source===src&&x.ts>=start&&x.ts<end);
+    const avg=slice.length?slice.reduce((a,b)=>a+levelScore[b.risk],0)/slice.length:0;
+    return {count:slice.length,avg};
+  }));
+  const shade=v=>v===0?"#0b0b1a":v<1.8?"#00ff8844":v<2.5?"#ffcc0044":"#ff335566";
+  const totals=incidents.reduce((a,b)=>{a[b.risk]=(a[b.risk]||0)+1;return a;},{SAFE:0,SUSPICIOUS:0,DANGER:0});
+  return <div>
+    <Label>Phishing Risk Heatmap</Label>
+    <Card>
+      <div style={{fontSize:12,color:"#667",marginBottom:10}}>Analyst view of risk concentration by detector and 4-hour windows (last 24h).</div>
+      <div style={{display:"grid",gridTemplateColumns:`90px repeat(${hourSlots.length},1fr)`,gap:6,alignItems:"center"}}>
+        <div/>
+        {hourSlots.map(h=><div key={h} style={{fontSize:9,color:"#445",textAlign:"center"}}>{h}</div>)}
+        {sources.map((s,row)=><React.Fragment key={s}>
+          <div style={{fontSize:10,color:"#667",letterSpacing:1}}>{sourceLabel[s]}</div>
+          {matrix[row].map((c,i)=><div key={i} title={`${sourceLabel[s]}: ${c.count} events`} style={{height:26,borderRadius:4,background:shade(c.avg),border:"1px solid #1a1a30",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,color:"#dde"}}>{c.count||""}</div>)}
+        </React.Fragment>)}
+      </div>
+      <div style={{display:"flex",gap:10,marginTop:14,flexWrap:"wrap"}}>
+        {["SAFE","SUSPICIOUS","DANGER"].map(r=><Tag key={r} color={RISK_CFG[r].color}>{r}: {totals[r]||0}</Tag>)}
+      </div>
+      {incidents.length===0&&<InfoBox color="#ffcc00">No scan telemetry yet. Run detectors to populate the heatmap.</InfoBox>}
+    </Card>
+  </div>;
+}
+
+// ── Automatic Incident Response ──────────────────────────────────────────────
+function IncidentResponsePanel(){
+  const{dark}=useTheme();
+  const[indicator,setIndicator]=useState("secure-paypal-login.xyz");
+  const[type,setType]=useState("domain");
+  const[risk,setRisk]=useState("DANGER");
+  const[actions,setActions]=useState([]);
+  const execute=()=>{
+    const playbook=risk==="DANGER"
+      ?["quarantine email","remove email from inboxes","block domain","block sender","block URL"]
+      :risk==="SUSPICIOUS"
+      ?["tag message as suspicious","isolate sender for review","stage domain block (pending approval)"]
+      :["log incident for metrics"];
+    setActions(playbook.map((a,i)=>({id:i,action:a,status:"executed",ts:new Date().toLocaleTimeString()})));
+  };
+  return <div>
+    <Label>Automatic Incident Response Playbook</Label>
+    <Card>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 150px 150px",gap:10}}>
+        <input value={indicator} onChange={e=>setIndicator(e.target.value)} style={{background:dark?"#0a0a18":"#f5f6fc",border:`1px solid ${dark?"#1a1a38":"#dde0f0"}`,borderRadius:7,padding:"10px 13px",fontFamily:MONO,fontSize:12,color:dark?"#c8d0e0":"#1a1a38"}} placeholder="Indicator"/>
+        <select value={type} onChange={e=>setType(e.target.value)} style={{background:dark?"#0a0a18":"#f5f6fc",border:`1px solid ${dark?"#1a1a38":"#dde0f0"}`,borderRadius:7,padding:"10px",fontFamily:MONO,color:dark?"#c8d0e0":"#1a1a38"}}>{["domain","url","sender","email"].map(x=><option key={x} value={x}>{x.toUpperCase()}</option>)}</select>
+        <select value={risk} onChange={e=>setRisk(e.target.value)} style={{background:dark?"#0a0a18":"#f5f6fc",border:`1px solid ${dark?"#1a1a38":"#dde0f0"}`,borderRadius:7,padding:"10px",fontFamily:MONO,color:dark?"#c8d0e0":"#1a1a38"}}>{["SAFE","SUSPICIOUS","DANGER"].map(x=><option key={x} value={x}>{x}</option>)}</select>
+      </div>
+      <div style={{marginTop:10}}><button style={btnStyle("#ff5533")} onClick={execute}>RUN AUTO RESPONSE</button></div>
+      {actions.length>0&&<div style={{marginTop:12}}>
+        <Label>Executed Actions</Label>
+        {actions.map(a=><div key={a.id} style={{display:"flex",justifyContent:"space-between",padding:"8px 12px",border:"1px solid #1a1a30",borderRadius:6,marginTop:6,background:dark?"#0d0d1e":"#f8f9ff"}}><span style={{fontSize:12,color:"#ccd"}}>{a.action}</span><span style={{fontSize:10,color:"#667"}}>{a.status} · {a.ts}</span></div>)}
+      </div>}
+    </Card>
+  </div>;
+}
+
+// ── Phishing Simulation Lab ──────────────────────────────────────────────────
+function SimulationLab(){
+  const{dark}=useTheme();
+  const[name,setName]=useState("Q2 Awareness Blast");
+  const[targets,setTargets]=useState(320);
+  const[difficulty,setDifficulty]=useState("medium");
+  const[result,setResult]=useState(null);
+  const run=()=>{
+    const seed=hashStr(`${name}-${targets}-${difficulty}`);
+    const base=difficulty==="high"?0.22:difficulty==="medium"?0.13:0.08;
+    const opened=Math.round(targets*(0.68+(seed%17)/100));
+    const clicked=Math.round(targets*(base+(seed%9)/100));
+    const submitted=Math.round(clicked*(0.35+((seed>>3)%20)/100));
+    setResult({opened,clicked,submitted,reported:Math.round(targets*(0.18+((seed>>5)%18)/100)),riskTeams:[["Finance",Math.round(clicked*0.34)],["HR",Math.round(clicked*0.22)],["Ops",Math.round(clicked*0.17)]]});
+  };
+  return <div>
+    <Label>Phishing Simulation & Training</Label>
+    <Card>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 120px 140px",gap:10}}>
+        <input value={name} onChange={e=>setName(e.target.value)} style={{background:dark?"#0a0a18":"#f5f6fc",border:`1px solid ${dark?"#1a1a38":"#dde0f0"}`,borderRadius:7,padding:"10px 13px",fontFamily:MONO,fontSize:12,color:dark?"#c8d0e0":"#1a1a38"}} placeholder="Campaign name"/>
+        <input type="number" value={targets} onChange={e=>setTargets(Math.max(1,Number(e.target.value)||1))} style={{background:dark?"#0a0a18":"#f5f6fc",border:`1px solid ${dark?"#1a1a38":"#dde0f0"}`,borderRadius:7,padding:"10px 13px",fontFamily:MONO,fontSize:12,color:dark?"#c8d0e0":"#1a1a38"}}/>
+        <select value={difficulty} onChange={e=>setDifficulty(e.target.value)} style={{background:dark?"#0a0a18":"#f5f6fc",border:`1px solid ${dark?"#1a1a38":"#dde0f0"}`,borderRadius:7,padding:"10px",fontFamily:MONO,color:dark?"#c8d0e0":"#1a1a38"}}>{["low","medium","high"].map(d=><option key={d} value={d}>{d.toUpperCase()}</option>)}</select>
+      </div>
+      <div style={{marginTop:10}}><button style={btnStyle("#22aa66")} onClick={run}>LAUNCH SIMULATION</button></div>
+      {result&&<div style={{marginTop:12}}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}}>
+          {[["Opened",result.opened,"#6699ff"],["Clicked",result.clicked,"#ffcc00"],["Submitted Credentials",result.submitted,"#ff3355"],["Reported",result.reported,"#00ff88"]].map(([l,v,c])=><div key={l} style={{background:dark?"#0d0d1e":"#f8f9ff",border:`1px solid ${c}44`,borderRadius:8,padding:"10px 12px"}}><div style={{fontFamily:SYNE,fontWeight:900,fontSize:22,color:c}}>{v}</div><div style={{fontSize:10,color:"#445"}}>{l}</div></div>)}
+        </div>
+        <div style={{marginTop:10}}><Label>Top Click Departments</Label>{result.riskTeams.map(([t,n])=><Tag key={t} color="#ffcc00">{t}: {n}</Tag>)}</div>
+      </div>}
+    </Card>
   </div>;
 }
 
@@ -1243,16 +1613,47 @@ function AwarenessQuiz(){
 
 // ── Sub-panels used in URL Scanner ───────────────────────────────────────────
 function ScreenshotPanel({url,risk}){
-  const[st,setSt]=useState("loading");let safe;try{safe=new URL(url.startsWith("http")?url:"https://"+url);}catch{return null;}
+  const[st,setSt]=useState("loading");
+  const[srcIdx,setSrcIdx]=useState(0);
+  let safe;try{safe=new URL(url.startsWith("http")?url:"https://"+url);}catch{return null;}
+  const previewSources=[
+    `https://s.wordpress.com/mshots/v1/${encodeURIComponent(safe.href)}?w=1200`,
+    `https://image.thum.io/get/width/1200/noanimate/${safe.href}`
+  ];
+  useEffect(()=>{setSt("loading");setSrcIdx(0);},[safe.href,risk]);
+  if(risk!=="SAFE")return null;
   return <Card style={{marginTop:16}}><Label>Site Preview</Label>
     <div style={{position:"relative",borderRadius:8,overflow:"hidden",border:"1px solid #1e2240",background:"#060610"}}>
-      {st==="loading"&&<div style={{height:160,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:10}}><Spinner color="#ff3355" size={32}/><span style={{fontSize:11,color:"#445",letterSpacing:3}}>LOADING PREVIEW...</span></div>}
-      <iframe src={`https://thumbnail.ws/api/thumbnail/plain/get?key=16a97ec7be8a8b5765cdfb59f3b70d76de6bc5e9ff26&url=${encodeURIComponent(safe.href)}&width=640`} style={{width:"100%",height:220,border:"none",display:st==="ok"?"block":"none",opacity:.85}} onLoad={()=>setSt("ok")} onError={()=>setSt("err")} sandbox="allow-scripts allow-same-origin" title="Preview"/>
-      {st==="err"&&<div style={{padding:"28px 0",display:"flex",flexDirection:"column",alignItems:"center",gap:12}}><img src={`https://www.google.com/s2/favicons?sz=128&domain=${safe.hostname}`} style={{width:48,height:48,borderRadius:8}} alt="" onError={e=>e.target.style.display="none"}/><div style={{fontSize:12,color:"#445",letterSpacing:2}}>PREVIEW UNAVAILABLE</div><a href={safe.href} target="_blank" rel="noopener noreferrer" style={{fontSize:11,color:"#ff3355",textDecoration:"none",border:"1px solid #ff335533",padding:"6px 14px",borderRadius:4}}>⚠ OPEN IN NEW TAB (RISKY)</a></div>}
+      {st==="loading"&&<div style={{height:160,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:10}}><Spinner color="#22aaff" size={32}/><span style={{fontSize:11,color:"#445",letterSpacing:3}}>LOADING SAFE PREVIEW...</span></div>}
+      <img src={previewSources[srcIdx]} alt={`Preview of ${safe.hostname}`} style={{width:"100%",height:220,objectFit:"cover",display:st==="ok"?"block":"none",opacity:.9}} onLoad={()=>setSt("ok")} onError={()=>{if(srcIdx<previewSources.length-1){setSrcIdx(i=>i+1);}else setSt("err");}}/>
+      {st==="err"&&<div style={{padding:"28px 0",display:"flex",flexDirection:"column",alignItems:"center",gap:12}}><img src={`https://www.google.com/s2/favicons?sz=128&domain=${safe.hostname}`} style={{width:48,height:48,borderRadius:8}} alt="" onError={e=>e.target.style.display="none"}/><div style={{fontSize:12,color:"#445",letterSpacing:2}}>PREVIEW UNAVAILABLE</div><a href={safe.href} target="_blank" rel="noopener noreferrer" style={{fontSize:11,color:"#22aaff",textDecoration:"none",border:"1px solid #22aaff33",padding:"6px 14px",borderRadius:4}}>OPEN SAFE URL</a></div>}
       {risk==="DANGER"&&st==="ok"&&<div style={{position:"absolute",inset:0,background:"rgba(255,51,85,.08)",border:"2px solid #ff335566",pointerEvents:"none",display:"flex",alignItems:"flex-start",justifyContent:"flex-end",padding:8}}><span style={{background:"#ff3355",color:"#fff",fontSize:10,fontFamily:MONO,padding:"3px 8px",borderRadius:3,letterSpacing:2}}>DANGER SITE</span></div>}
     </div>
     <div style={{marginTop:10,fontSize:11,color:"#445"}}>🔗 <span style={{color:"#667799"}}>{safe.href}</span></div>
   </Card>;
+}
+
+function MiniSitePreview({url}){
+  const[st,setSt]=useState("loading");
+  const[srcIdx,setSrcIdx]=useState(0);
+  let safe;
+  try{safe=new URL(url.startsWith("http")?url:"https://"+url);}catch{return null;}
+  const previewSources=[
+    `https://s.wordpress.com/mshots/v1/${encodeURIComponent(safe.href)}?w=600`,
+    `https://image.thum.io/get/width/600/noanimate/${safe.href}`
+  ];
+  useEffect(()=>{setSt("loading");setSrcIdx(0);},[safe.href]);
+  return <div style={{marginTop:8,border:"1px solid #1e2240",borderRadius:7,overflow:"hidden",background:"#070712"}}>
+    {st==="loading"&&<div style={{height:70,display:"flex",alignItems:"center",justifyContent:"center",gap:8,fontSize:10,color:"#556"}}><Spinner color="#22aaff" size={12}/>Loading safe preview...</div>}
+    <img
+      src={previewSources[srcIdx]}
+      style={{width:"100%",height:120,objectFit:"cover",display:st==="ok"?"block":"none",opacity:.88}}
+      onLoad={()=>setSt("ok")}
+      onError={()=>{if(srcIdx<previewSources.length-1){setSrcIdx(i=>i+1);}else setSt("err");}}
+      alt={`Safe preview of ${safe.hostname}`}
+    />
+    {st==="err"&&<div style={{padding:"8px 10px",fontSize:10,color:"#667"}}>Preview unavailable for this safe URL.</div>}
+  </div>;
 }
 
 function DNSGeoPanel({domain}){
@@ -1293,6 +1694,8 @@ const btnStyle=(c="#ff3355")=>({background:c,border:"none",borderRadius:6,paddin
 const NAV=[
   {group:"Detection",items:[
     {id:"url",icon:"🔍",label:"URL Scanner"},
+    {id:"deob",icon:"🧬",label:"Link Deobfuscator"},
+    {id:"brand",icon:"🏷️",label:"Brand Detector"},
     {id:"email",icon:"📧",label:"Email Analyzer"},
     {id:"header",icon:"📋",label:"Header Analyzer"},
     {id:"qr",icon:"📷",label:"QR Scanner"},
@@ -1300,9 +1703,14 @@ const NAV=[
     {id:"homoglyph",icon:"🔤",label:"Homoglyph Detect"},
     {id:"bulk",icon:"📋",label:"Bulk Scanner"},
   ]},
+  {group:"Operations",items:[
+    {id:"heatmap",icon:"🗺️",label:"Risk Heatmap"},
+    {id:"response",icon:"🤖",label:"Auto Response"},
+  ]},
   {group:"Training",items:[
     {id:"quiz",icon:"🎯",label:"Awareness Quiz"},
     {id:"drills",icon:"⏱",label:"Scenario Drills"},
+    {id:"simlab",icon:"🎣",label:"Simulation Lab"},
   ]},
   {group:"Settings",items:[
     {id:"blocklist",icon:"🚫",label:"Blocklist"},
@@ -1316,11 +1724,16 @@ export default function App(){
   const[overlay,setOverlay]=useState(null);
   const[sound,setSound]=useState(true);
   const[isMobile,setIsMobile]=useState(()=>typeof window!=="undefined"?window.innerWidth<=900:false);
+  const[incidents,setIncidents]=useState([]);
 
   const[sidebarOpen,setSidebarOpen]=useState(true);
   const playAlert=useAudio();
 
-  const trigger=r=>{ if(sound)playAlert(r); if(r!=="SAFE")setOverlay(r); };
+  const trigger=r=>{
+    if(sound)playAlert(r);
+    if(r!=="SAFE")setOverlay(r);
+    setIncidents(prev=>[{risk:r,source:tab,ts:Date.now()},...prev].slice(0,500));
+  };
 
 
   // Keyboard shortcuts
@@ -1427,14 +1840,19 @@ export default function App(){
         {/* Panel */}
         <div className="panel-wrap" style={{flex:1,maxWidth:880,width:"100%",margin:"0 auto",padding:"28px 24px 60px",animation:"fadeIn .25s ease"}}>
           {tab==="url"&&<URLScanner onTrigger={trigger} sound={sound}/>}
+          {tab==="deob"&&<LinkDeobfuscator onTrigger={trigger}/>}
+          {tab==="brand"&&<BrandImpersonationDetector onTrigger={trigger}/>}
           {tab==="email"&&<EmailAnalyzer onTrigger={trigger}/>}
           {tab==="header"&&<HeaderAnalyzer onTrigger={trigger}/>}
           {tab==="qr"&&<QRScanner onTrigger={trigger}/>}
           {tab==="attach"&&<AttachmentScorer/>}
           {tab==="homoglyph"&&<HomoglyphDetector/>}
           {tab==="bulk"&&<BulkScanner onTrigger={trigger}/>}
+          {tab==="heatmap"&&<RiskHeatmap incidents={incidents}/>}
+          {tab==="response"&&<IncidentResponsePanel/>}
           {tab==="quiz"&&<AwarenessQuiz/>}
           {tab==="drills"&&<ScenarioDrills/>}
+          {tab==="simlab"&&<SimulationLab/>}
           {tab==="blocklist"&&<BlocklistManager/>}
         </div>
       </div>
