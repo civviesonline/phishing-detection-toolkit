@@ -12,10 +12,17 @@ export function CLIIntegration() {
 
   const logLine = latest ? formatLogLine(latest) : "No scans yet";
   const exportPayload = useMemo(() => JSON.stringify({ history: history.slice(0, 5) }, null, 2), [history]);
+  const CLI_COMMAND = "./launch-phishguard.sh --scan-log phishguard-cli-log.json";
 
   const copyLog = async () => {
     if (navigator.clipboard) {
       await navigator.clipboard.writeText(logLine);
+    }
+  };
+
+  const copyCommand = async () => {
+    if (navigator.clipboard) {
+      await navigator.clipboard.writeText(CLI_COMMAND);
     }
   };
 
@@ -31,7 +38,7 @@ export function CLIIntegration() {
 
   return (
     <Card>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div className="pg-row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
           <Label>CLI Bridge</Label>
           <div style={{ fontSize: 12, color: "#667" }}>Export logs or trigger terminal flows</div>
@@ -43,7 +50,9 @@ export function CLIIntegration() {
 
       <div style={{ marginTop: 12, borderRadius: 8, background: "#070712", padding: "12px 14px", border: "1px solid rgba(255,255,255,0.08)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <Tag color={latest ? (latest.risk === "SAFE" ? "#00ff88" : latest.risk === "DANGER" ? "#ff3355" : "#ffcc00") : "#667"}>{latest ? latest.risk : "PENDING"}</Tag>
+          <Tag color={latest ? (latest.risk === "SAFE" ? "#00ff88" : latest.risk === "DANGER" ? "#ff3355" : "#ffcc00") : "#667"}>
+            {latest ? latest.risk : "PENDING"}
+          </Tag>
           <span style={{ fontSize: 11, color: "#445" }}>Latest CLI log</span>
         </div>
         <pre style={{ marginTop: 8, fontSize: 11, color: "#dde", overflowX: "auto", whiteSpace: "pre-wrap", fontFamily: "Share Tech Mono, monospace" }}>
@@ -57,7 +66,12 @@ export function CLIIntegration() {
       </div>
 
       <InfoBox color="#22aaff" style={{ marginTop: 12 }}>
-        Run <code>./launch-phishguard.sh --scan-log phishguard-cli-log.json</code> on Kali to let the shell ingest the exported JSON.
+        <div className="pg-row" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <div style={{ fontSize: 12 }}>
+            Run <code>{CLI_COMMAND}</code> on Kali to ingest the log and keep terminal workflows in sync.
+          </div>
+          <button style={btnStyle("#22aaff")} onClick={copyCommand}>Copy runner</button>
+        </div>
       </InfoBox>
     </Card>
   );

@@ -15,6 +15,10 @@ export function AnalystDashboard() {
   const dangerCount = history.filter(item => item.risk === "DANGER").length;
   const currentFocus = history[0]?.type?.toUpperCase() ?? "N/A";
   const recentEntries = history.slice(0, 5);
+  const lastScan = history[0];
+  const lastScanTime = lastScan ? new Date(lastScan.timestamp).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }) : "never";
+  const lastScanContext = lastScan ? `${lastScan.type?.toUpperCase() ?? "SCAN"} · ${lastScan.domain || lastScan.summary || "details"}` : "Awaiting first scan";
+  const dangerRatio = totalScans ? Math.round((dangerCount / totalScans) * 100) : 0;
 
   return (
     <Card>
@@ -38,6 +42,12 @@ export function AnalystDashboard() {
         </div>
       </div>
 
+      <InfoBox color="#22aaff" style={{ marginTop: 12 }}>
+        <div>Session history, pinned widgets, and recommendations persist in localStorage for this Kali workstation.</div>
+        <div style={{ marginTop: 4, fontSize: 11, color: "#88c8ff" }}>Last sync: {lastScanTime} · {lastScanContext}</div>
+        <div style={{ marginTop: 4, fontSize: 11, color: "#88c8ff" }}>{dangerRatio}% of this session's scans were danger-flagged.</div>
+      </InfoBox>
+
       <div style={{ marginTop: 18 }}>
         <div style={{ fontSize: 11, letterSpacing: 2, color: "#445", marginBottom: 6 }}>Favorite widgets</div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -57,7 +67,10 @@ export function AnalystDashboard() {
       </div>
 
       <div style={{ marginTop: 18 }}>
-        <div style={{ fontSize: 11, letterSpacing: 2, color: "#445", marginBottom: 6 }}>Session history</div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+          <div style={{ fontSize: 11, letterSpacing: 2, color: "#445" }}>Session history</div>
+          <Tag color="#ffcc00">{dangerRatio}% danger ratio</Tag>
+        </div>
         {recentEntries.length === 0 && <div style={{ fontSize: 11, color: "#667" }}>History syncs after your first scan.</div>}
         {recentEntries.map(item => (
           <div key={item.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 10px", borderRadius: 6, background: "#0a0a12", border: "1px solid rgba(255,255,255,0.05)", marginBottom: 6 }}>

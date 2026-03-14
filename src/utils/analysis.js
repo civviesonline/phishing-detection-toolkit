@@ -1,4 +1,4 @@
-import { BAD_TLDS, KW, BRANDS, SHORTENERS, GLYPHS, REDIRECT_KEYS, GEOS } from '../data/constants';
+import { BAD_TLDS, KW, BRANDS, SHORTENERS, GLYPHS, REDIRECT_KEYS, GEOS, SAFE_DOMAINS } from '../data/constants';
 
 export const hashStr=s=>{let h=0;for(let i=0;i<s.length;i++)h=(Math.imul(31,h)+s.charCodeAt(i))|0;return Math.abs(h);};
 export const fakeIP=s=>{const h=hashStr(s);return`${(h%200)+40}.${(h>>4)%256}.${(h>>8)%256}.${(h>>12)%254+1}`;};
@@ -98,6 +98,7 @@ export function analyzeURL(raw, CUSTOM_DOMAINS=[], CUSTOM_KW=[]){
   catch{return{score:100,risk:"DANGER",flags:["Invalid URL format"],domain:raw,raw};}
   const dom=parsed.hostname.toLowerCase(),full=url.toLowerCase();
   const add=(cond,pts,msg)=>{if(cond){score+=pts;flags.push(msg);}};
+  const allowlistDomain=SAFE_DOMAINS.find(allowed=>dom===allowed||dom.endsWith("."+allowed));
   add(/^\d+\.\d+\.\d+\.\d+$/.test(dom),35,"IP address instead of domain name");
   add(BAD_TLDS.includes("."+dom.split(".").pop()),20,`Suspicious TLD: .${dom.split(".").pop()}`);
   add(dom.length>30,15,"Unusually long domain name");
@@ -151,6 +152,18 @@ export function analyzeURL(raw, CUSTOM_DOMAINS=[], CUSTOM_KW=[]){
     intelligence.tactic = "Verified Safe";
     intelligence.intent = "Legitimate Resource";
     intelligence.recommendation = "No action required. The domain appears to be a well-known legitimate service.";
+  }
+
+  if (allowlistDomain) {
+    score = Math.min(score, 18);
+    risk = "SAFE";
+    flags = [...new Set([...flags, `Allowlisted domain: ${allowlistDomain}`])];
+    intelligence = {
+      tactic: "Analyst Allowlist Override",
+      intent: "Trusted Resource",
+      recommendation: "Allowlist overrides make this domain safe while you run PhishGuard on Kali.",
+      technicalDetail: "Analyst-curated allowlist bypasses scoring for known good destinations."
+    };
   }
 
   return {score, risk, flags, domain:dom, raw, intelligence};

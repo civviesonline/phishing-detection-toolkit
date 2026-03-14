@@ -13,8 +13,8 @@ export function LinkDeobfuscator({ onTrigger }) {
   return (
     <div>
       <Label>Unmask hidden redirect chains and encoded URLs</Label>
-      <div style={{ display: "flex", gap: 10 }}>
-        <input style={{ flex: 1, background: dark ? "#0a0a18" : "#f5f6fc", border: "1px solid #1a1a30", borderRadius: 8, padding: "12px 16px", color: dark ? "#c8d0e0" : "#1a1a38", fontFamily: MONO, fontSize: 13, outline: "none" }} placeholder="https://example.com/redirect?url=http%3A%2F%2Fmalicious.xyz" value={url} onChange={e => { setUrl(e.target.value); setRes(null); }} />
+      <div className="pg-row" style={{ display: "flex", gap: 10 }}>
+        <input style={{ flex: 1, minWidth: 0, boxSizing: "border-box", background: dark ? "#0a0a18" : "#f5f6fc", border: "1px solid #1a1a30", borderRadius: 8, padding: "12px 16px", color: dark ? "#c8d0e0" : "#1a1a38", fontFamily: MONO, fontSize: 13, outline: "none" }} placeholder="https://example.com/redirect?url=http%3A%2F%2Fmalicious.xyz" value={url} onChange={e => { setUrl(e.target.value); setRes(null); }} />
         <button style={btnStyle("#22aaff")} onClick={run}>{scanning ? "DECODING..." : "UNMASK LINK"}</button>
       </div>
       {scanning && <div style={{ textAlign: "center", padding: "40px 0" }}><Spinner size={32} color="#22aaff" /></div>}

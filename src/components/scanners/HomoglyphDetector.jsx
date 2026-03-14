@@ -10,8 +10,8 @@ export function HomoglyphDetector() {
   return (
     <div>
       <Label>Identify Unicode lookalike (IDN homograph) attacks</Label>
-      <div style={{ display: "flex", gap: 10 }}>
-        <input style={{ flex: 1, background: dark ? "#0a0a18" : "#f5f6fc", border: "1px solid #1a1a30", borderRadius: 6, padding: "12px 16px", color: dark ? "#c8d0e0" : "#1a1a38", fontFamily: MONO, fontSize: 13, outline: "none" }} placeholder="googIe.com (uses uppercase I)" value={dom} onChange={e => { setDom(e.target.value); setRes(null); }} onKeyDown={e => e.key === "Enter" && scan()} />
+      <div className="pg-row" style={{ display: "flex", gap: 10 }}>
+        <input style={{ flex: 1, minWidth: 0, boxSizing: "border-box", background: dark ? "#0a0a18" : "#f5f6fc", border: "1px solid #1a1a30", borderRadius: 6, padding: "12px 16px", color: dark ? "#c8d0e0" : "#1a1a38", fontFamily: MONO, fontSize: 13, outline: "none" }} placeholder="googIe.com (uses uppercase I)" value={dom} onChange={e => { setDom(e.target.value); setRes(null); }} onKeyDown={e => e.key === "Enter" && scan()} />
         <button style={btnStyle("#6644ff")} onClick={scan}>DETECT HOMOGLYPHS</button>
       </div>
       {res && <div style={{ animation: "fadeIn .3s ease" }}>

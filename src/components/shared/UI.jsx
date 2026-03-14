@@ -1,7 +1,7 @@
 import React, { useState, useEffect, createContext, useContext } from "react";
 import { SYNE, MONO, RISK_CFG } from "../../data/constants";
 
-export const ThemeCtx = createContext({ dark: true });
+export const ThemeCtx = createContext({ dark: true, isMobile: false });
 export const useTheme = () => useContext(ThemeCtx);
 
 export function Card({ children, border, style = {} }) {
@@ -144,4 +144,21 @@ export function ThreatIntelligencePanel({ intelligence, risk }) {
   );
 }
 
-export const btnStyle = (c = "#ff3355") => ({ background: c, border: "none", borderRadius: 6, padding: "11px 22px", fontFamily: SYNE, fontWeight: 700, fontSize: 14, letterSpacing: 2, color: "#fff", cursor: "pointer", boxShadow: `0 0 16px ${c}44`, transition: "all .2s", whiteSpace: "nowrap" });
+export const btnStyle = (c = "#ff3355") => ({
+  background: c,
+  border: "none",
+  borderRadius: 6,
+  padding: "11px var(--pg-btn-pad-x, 22px)",
+  fontFamily: SYNE,
+  fontWeight: 700,
+  fontSize: 14,
+  letterSpacing: "var(--pg-btn-letter, 2px)",
+  color: "#fff",
+  cursor: "pointer",
+  boxShadow: `0 0 16px ${c}44`,
+  transition: "all .2s",
+  whiteSpace: "var(--pg-btn-wrap, nowrap)",
+  textAlign: "center",
+  lineHeight: 1.2,
+  maxWidth: "100%"
+});

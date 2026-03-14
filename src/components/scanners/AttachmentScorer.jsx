@@ -23,8 +23,8 @@ export function AttachmentScorer({ onTrigger }) {
   return (
     <div>
       <Label>Analyze suspicious filenames or attachments</Label>
-      <div style={{ display: "flex", gap: 10 }}>
-        <input style={{ flex: 1, background: dark ? "#0a0a18" : "#f5f6fc", border: "1px solid #1a1a30", borderRadius: 6, padding: "12px 16px", color: dark ? "#c8d0e0" : "#1a1a38", fontFamily: MONO, fontSize: 13, outline: "none" }} placeholder="invoice_392.pdf.exe" value={file} onChange={e => { setFile(e.target.value); setRes(null); }} onKeyDown={e => e.key === "Enter" && scan()} />
+      <div className="pg-row" style={{ display: "flex", gap: 10 }}>
+        <input style={{ flex: 1, minWidth: 0, boxSizing: "border-box", background: dark ? "#0a0a18" : "#f5f6fc", border: "1px solid #1a1a30", borderRadius: 6, padding: "12px 16px", color: dark ? "#c8d0e0" : "#1a1a38", fontFamily: MONO, fontSize: 13, outline: "none" }} placeholder="invoice_392.pdf.exe" value={file} onChange={e => { setFile(e.target.value); setRes(null); }} onKeyDown={e => e.key === "Enter" && scan()} />
         <button style={btnStyle("#ff3355")} onClick={scan}>SCORE FILE</button>
       </div>
       {res && <div style={{ animation: "fadeIn .3s ease" }}>

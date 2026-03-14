@@ -4,7 +4,7 @@ import { MONO, SYNE, RISK_CFG, CUSTOM_DOMAINS, CUSTOM_KW } from "../../data/cons
 import { analyzeEmail, playSound } from "../../utils/analysis";
 
 export function EmailAnalyzer({ onTrigger }) {
-  const { dark } = useTheme();
+  const { dark, isMobile } = useTheme();
   const [email, setEmail] = useState(""), [res, setRes] = useState(null);
   const inp = { width: "100%", background: dark ? "#0a0a18" : "#f5f6fc", border: `1px solid ${dark ? "#1a1a38" : "#dde0f0"}`, borderRadius: 7, padding: "13px 17px", fontFamily: MONO, fontSize: 16, color: dark ? "#c8d0e0" : "#1a1a38", outline: "none", boxSizing: "border-box" };
   const scan = () => {
@@ -25,9 +25,24 @@ export function EmailAnalyzer({ onTrigger }) {
     <div>
       <Label>Paste suspicious email body for threat analysis</Label>
       <textarea style={{ ...inp, minHeight: 160, resize: "vertical", lineHeight: 1.7 }} placeholder={"Paste email content here...\n\nExample: Dear Customer, your account has been suspended. Click immediately to verify within 24 hours."} value={email} onChange={e => { setEmail(e.target.value); setRes(null); }} />
-      <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
-        <button style={btnStyle("#ff9900")} onClick={scan}>ANALYZE EMAIL</button>
-        {res && <button style={{ ...btnStyle("#1a1a30"), boxShadow: "none", border: "1px solid #2a2a50" }} onClick={() => { setEmail(""); setRes(null); }}>CLEAR</button>}
+      <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: 10, marginTop: 10, alignItems: isMobile ? "stretch" : "center" }}>
+        <button style={{ ...btnStyle("#ff9900"), width: isMobile ? "100%" : "auto" }} onClick={scan}>ANALYZE EMAIL</button>
+        {res && (
+          <button
+            style={{
+              ...btnStyle("#1a1a30"),
+              boxShadow: "none",
+              border: "1px solid #2a2a50",
+              width: isMobile ? "100%" : "auto"
+            }}
+            onClick={() => {
+              setEmail("");
+              setRes(null);
+            }}
+          >
+            CLEAR
+          </button>
+        )}
       </div>
       {res && <div style={{ animation: "fadeIn .3s ease" }}>
         <Card border={RISK_CFG[res.risk].color + "55"} style={{ marginTop: 16 }}>

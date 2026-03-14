@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useEffect } from "react";
+import React, { useCallback, useState, useEffect, useMemo } from "react";
 import { FONTS, MONO, SYNE } from "./data/constants";
 import { ThemeCtx, BrandMark, AlertOverlay } from "./components/shared/UI";
 import { URLScanner } from "./components/scanners/URLScanner";
@@ -18,8 +18,41 @@ import { CLIIntegration } from "./components/insights/CLIIntegration";
 
 const GLOBAL_STYLES = `
 ${FONTS}
+:root{
+  --pg-btn-wrap: nowrap;
+  --pg-btn-letter: 2px;
+  --pg-btn-pad-x: 22px;
+}
+html,body,#root{
+  margin:0;
+  padding:0;
+  width:100%;
+  min-height:100%;
+  background:#05050a;
+}
+body{overflow-x:hidden;}
+*,*::before,*::after{box-sizing:border-box;}
 @keyframes pulse{0%,100%{transform:scale(.85);opacity:.6}50%{transform:scale(1.2);opacity:1}}
 @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@keyframes blipPulse{0%{transform:scale(.7);opacity:.7}50%{transform:scale(1.3);opacity:1}100%{transform:scale(.7);opacity:.7}}
+@media (max-width: 900px){
+  :root{
+    --pg-btn-wrap: normal;
+    --pg-btn-letter: 1px;
+    --pg-btn-pad-x: 16px;
+  }
+  .pg-row{
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+  .pg-row > *{
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  .pg-grid-2{
+    grid-template-columns: 1fr !important;
+  }
+}
 `;
 
 const NAV = [
@@ -65,6 +98,11 @@ function AppShell() {
   const { addEntry } = useAnalyst();
 
   const sidebarWidth = 300;
+  const contentPadding = isMobile ? "92px 16px 60px" : "60px 40px";
+  const heroTitleSize = isMobile ? 32 : 48;
+  const heroMarginBottom = isMobile ? 42 : 56;
+  const heroUnderlineWidth = isMobile ? 60 : 80;
+  const contentGap = isMobile ? 28 : 36;
   const styles = {
     root: {
       minHeight: "100vh",
@@ -74,14 +112,15 @@ function AppShell() {
       transition: "background .3s ease"
     },
     sidebar: {
-      width: sidebarWidth,
+      width: isMobile ? "82vw" : sidebarWidth,
+      maxWidth: isMobile ? 320 : sidebarWidth,
       background: dark ? "#0a0a1a" : "#ffffff",
       borderRight: `1px solid ${dark ? "#1a1a38" : "#dde0f0"}`,
       height: "100vh",
       position: "fixed",
       left: 0,
       top: 0,
-      padding: "32px 24px",
+      padding: isMobile ? "24px 18px" : "32px 24px",
       boxSizing: "border-box",
       display: "flex",
       flexDirection: "column",
@@ -92,8 +131,14 @@ function AppShell() {
     },
     content: {
       marginLeft: isMobile ? 0 : sidebarWidth,
-      padding: isMobile ? "100px 20px 60px" : "60px 40px",
-      maxWidth: 1100
+      padding: contentPadding,
+      maxWidth: 1100,
+      width: "100%",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "stretch",
+      gap: contentGap,
+      justifyContent: "center"
     },
     navItem: active => ({
       display: "flex",
@@ -154,8 +199,10 @@ function AppShell() {
   const currentGroup = NAV.find(group => group.items.some(item => item.id === tab))?.group || "Detection";
   const currentLabel = NAV.flatMap(group => group.items).find(item => item.id === tab)?.label || "PhishGuard";
 
+  const themeValue = useMemo(() => ({ dark, setDark, isMobile }), [dark, isMobile]);
+
   return (
-    <ThemeCtx.Provider value={{ dark, setDark }}>
+    <ThemeCtx.Provider value={themeValue}>
       <style>{GLOBAL_STYLES}</style>
       <div style={styles.root}>
         <AlertOverlay level={alert} onDismiss={() => setAlert(null)} />
@@ -230,12 +277,12 @@ function AppShell() {
             </div>
           )}
           <div style={{ paddingTop: isMobile ? 72 : 0 }}>
-            <header style={{ marginBottom: 56 }}>
+          <header style={{ marginBottom: heroMarginBottom }}>
               <div style={{ fontSize: 12, color: "#ff3355", fontWeight: 900, letterSpacing: 5, marginBottom: 12, textTransform: "uppercase" }}>
                 {currentGroup} // Module
               </div>
-              <h1 style={{ fontSize: 48, fontWeight: 950, marginBottom: 12, letterSpacing: -2, color: dark ? "#fff" : "#1a1a38" }}>{currentLabel}</h1>
-              <div style={{ height: 4, width: 80, background: "#ff3355", borderRadius: 2 }} />
+              <h1 style={{ fontSize: heroTitleSize, fontWeight: 950, marginBottom: 12, letterSpacing: -2, color: dark ? "#fff" : "#1a1a38" }}>{currentLabel}</h1>
+              <div style={{ height: 4, width: heroUnderlineWidth, background: "#ff3355", borderRadius: 2 }} />
             </header>
 
             <div style={{ animation: "fadeIn .4s ease" }}>

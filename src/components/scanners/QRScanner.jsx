@@ -4,7 +4,6 @@ import { SitePreview } from "../shared/SitePreview";
 import { MONO, SYNE, CUSTOM_DOMAINS, CUSTOM_KW, RISK_CFG } from "../../data/constants";
 import { analyzeURL, playSound } from "../../utils/analysis";
 
-const isMobile = typeof window !== "undefined" ? window.innerWidth <= 900 : false;
 
 const QR_STEPS = [
   { title: "Steady the frame", detail: "Keep the entire QR code centered and well-lit for sharp decoding." },
@@ -14,6 +13,7 @@ const QR_STEPS = [
 
 export function QRScanner({ onTrigger }) {
   const { dark } = useTheme();
+  const [isCompact, setIsCompact] = useState(() => (typeof window !== "undefined" ? window.innerWidth <= 900 : false));
   const [loaded, setLoaded] = useState(false);
   const [res, setRes] = useState(null);
   const [status, setStatus] = useState("");
@@ -24,6 +24,13 @@ export function QRScanner({ onTrigger }) {
   
   const fileRef = useRef(null);
   const scannerRef = useRef(null); // Html5Qrcode instance
+
+  useEffect(() => {
+    const handleResize = () => setIsCompact(window.innerWidth <= 900);
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   useEffect(() => {
     if (window.Html5Qrcode) { setLoaded(true); return; }
@@ -139,7 +146,7 @@ export function QRScanner({ onTrigger }) {
       style={{ display: "flex", flexDirection: "column", gap: 16 }}
     >
       <Label>Scan QR & Barcodes via camera or image upload</Label>
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))", gap: 12 }}>
+      <div style={{ display: "grid", gridTemplateColumns: isCompact ? "1fr" : "repeat(3, minmax(0, 1fr))", gap: 12 }}>
         {QR_STEPS.map(step => (
           <Card key={step.title} style={{ padding: "12px 14px", borderRadius: 12, background: dark ? "#0a0a18" : "#fff", border: "1px solid rgba(255,255,255,0.08)" }}>
             <div style={{ fontSize: 10, letterSpacing: 2, color: "#667", marginBottom: 6 }}>{step.title}</div>
@@ -147,8 +154,8 @@ export function QRScanner({ onTrigger }) {
           </Card>
         ))}
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1.05fr 0.95fr", gap: 16 }}>
-        <Card border={dragOver ? "#ff3355" : undefined} style={{ position: "relative", minHeight: 320, overflow: "hidden" }}>
+      <div style={{ display: "grid", gridTemplateColumns: isCompact ? "1fr" : "1.05fr 0.95fr", gap: 16 }}>
+        <Card border={dragOver ? "#ff3355" : undefined} style={{ position: "relative", minHeight: isCompact ? 260 : 320, overflow: "hidden" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
             <div style={{ fontSize: 15, fontWeight: 700 }}>Live Camera Feed</div>
             <span style={{ fontSize: 11, color: "#889" }}>{cameraStatusLabel}</span>
@@ -167,7 +174,7 @@ export function QRScanner({ onTrigger }) {
             <img src={preview} style={{ width: "100%", maxHeight: 260, objectFit: "contain", borderRadius: 10, opacity: 0.85 }} alt="Scan Preview" />
           )}
 
-          <div style={{ marginTop: "auto", paddingTop: 18, display: "flex", justifyContent: "center", gap: 10 }}>
+          <div className="pg-row" style={{ marginTop: "auto", paddingTop: 18, display: "flex", justifyContent: "center", gap: 10 }}>
             <button style={btnStyle(cameraOn ? "#333" : "#ff3355")} onClick={cameraOn ? stopCamera : startCamera}>
               {cameraOn ? "STOP SCANNER" : "START CAMERA"}
             </button>
@@ -179,15 +186,15 @@ export function QRScanner({ onTrigger }) {
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <Card>
             <Label>Manual Entry / Results</Label>
-            <div style={{ marginBottom: 16 }}>
+            <div style={{ marginBottom: 16, display: "flex", flexDirection: isCompact ? "column" : "row", gap: 8 }}>
               <input
-                style={{ width: "100%", background: dark ? "#0a0a18" : "#f5f6fc", border: "1px solid #1a1a30", borderRadius: 6, padding: "12px 14px", color: dark ? "#c8d0e0" : "#1a1a38", fontFamily: MONO, fontSize: 13, outline: "none", boxSizing: "border-box" }}
+                style={{ flex: 1, minWidth: 0, background: dark ? "#0a0a18" : "#f5f6fc", border: "1px solid #1a1a30", borderRadius: 6, padding: "12px 14px", color: dark ? "#c8d0e0" : "#1a1a38", fontFamily: MONO, fontSize: 13, outline: "none", boxSizing: "border-box" }}
                 placeholder="Paste decoded text or URL..."
                 value={manualUrl}
                 onChange={e => setManualUrl(e.target.value)}
               />
               <button
-                style={{ ...btnStyle("#6644ff"), width: "100%", marginTop: 10 }}
+                style={{ ...btnStyle("#6644ff"), width: isCompact ? "100%" : "auto", alignSelf: isCompact ? "stretch" : "auto" }}
                 onClick={() => {
                   if (!manualUrl) return;
                   const r = analyzeURL(manualUrl, CUSTOM_DOMAINS, CUSTOM_KW);

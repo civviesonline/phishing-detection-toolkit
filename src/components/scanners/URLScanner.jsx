@@ -35,7 +35,7 @@ const sampleButtonStyle = (dark, variant) => {
 };
 
 export function URLScanner({ onTrigger, sound }) {
-  const { dark } = useTheme();
+  const { dark, isMobile } = useTheme();
   const [url, setUrl] = useState(""), [res, setRes] = useState(null), [scanning, setScanning] = useState(false);
   const inp = { width: "100%", background: dark ? "#0a0a18" : "#f5f6fc", border: `1px solid ${dark ? "#1a1a38" : "#dde0f0"}`, borderRadius: 7, padding: "13px 17px", fontFamily: MONO, fontSize: 16, color: dark ? "#c8d0e0" : "#1a1a38", outline: "none", boxSizing: "border-box" };
   const scan = () => {
@@ -54,9 +54,17 @@ export function URLScanner({ onTrigger, sound }) {
   return (
     <div>
       <Label>Paste any URL to scan for phishing indicators</Label>
-      <div style={{ display: "flex", gap: 10 }}>
-        <input style={inp} placeholder="https://suspicious-site.xyz/verify..." value={url} onChange={e => { setUrl(e.target.value); setRes(null); }} onKeyDown={e => e.key === "Enter" && scan()} />
-        <button style={btnStyle()} onClick={scan}>{scanning ? "SCANNING…" : "SCAN URL"}</button>
+      <div className="pg-row" style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: 10, alignItems: isMobile ? "stretch" : "center" }}>
+        <input
+          style={{ ...inp, flex: 1, minWidth: 0 }}
+          placeholder="https://suspicious-site.xyz/verify..."
+          value={url}
+          onChange={e => { setUrl(e.target.value); setRes(null); }}
+          onKeyDown={e => e.key === "Enter" && scan()}
+        />
+        <button style={{ ...btnStyle(), width: isMobile ? "100%" : "auto" }} onClick={scan}>
+          {scanning ? "SCANNING…" : "SCAN URL"}
+        </button>
       </div>
       <div style={{ fontSize: 13, color: "#445", marginTop: 6, letterSpacing: 1 }}>Tip: Press Ctrl+Enter to scan</div>
       {scanning && <Card style={{ marginTop: 16, position: "relative", overflow: "hidden", height: 90, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8 }}><div style={{ position: "absolute", left: 0, right: 0, height: 2, background: "linear-gradient(90deg,transparent,#ff3355,transparent)", animation: "shimmer 1s linear infinite" }} /><Spinner /><span style={{ fontSize: 12, color: "#445", letterSpacing: 4 }}>ANALYZING THREAT VECTORS...</span></Card>}
@@ -120,7 +128,7 @@ function BreachPanel({ domain }) {
       {domHits.length > 0 && <div style={{ marginBottom: 16 }}>{domHits.map(([d, b], i) => <div key={i} style={{ background: "rgba(255,51,85,.06)", border: "1px solid #ff335533", borderRadius: 6, padding: "10px 14px", marginBottom: 6 }}><div style={{ display: "flex", justifyBox: "space-between", alignItems: "center" }}><span style={{ fontFamily: MONO, color: "#ff8899", fontSize: 13 }}>{d}</span><Tag color="#ff3355">{b.y}</Tag></div><div style={{ fontSize: 11, color: "#667", marginTop: 4 }}>Records: <span style={{ color: "#ffcc00" }}>{b.n}</span> · {b.d}</div></div>)}</div>}
       <div style={{ background: dark ? "#0d0d1e" : "#f8f9ff", border: "1px solid #1a1a30", borderRadius: 8, padding: 16 }}>
         <div style={{ fontSize: 11, color: "#556", marginBottom: 10, letterSpacing: 1 }}>CHECK EMAIL IN BREACH DATABASES</div>
-        <div style={{ display: "flex", gap: 8 }}><input style={{ flex: 1, background: dark ? "#080814" : "#fff", border: "1px solid #1e2240", borderRadius: 6, padding: "9px 12px", fontFamily: MONO, fontSize: 12, color: dark ? "#c8d0e0" : "#1a1a38", outline: "none" }} placeholder="analyst@company.com" value={input} onChange={e => { setInput(e.target.value); setResult(null); }} onKeyDown={e => e.key === "Enter" && check()} /><button onClick={check} style={btnStyle()}>CHECK</button></div>
+        <div className="pg-row" style={{ display: "flex", gap: 8 }}><input style={{ flex: 1, minWidth: 0, boxSizing: "border-box", background: dark ? "#080814" : "#fff", border: "1px solid #1e2240", borderRadius: 6, padding: "9px 12px", fontFamily: MONO, fontSize: 12, color: dark ? "#c8d0e0" : "#1a1a38", outline: "none" }} placeholder="analyst@company.com" value={input} onChange={e => { setInput(e.target.value); setResult(null); }} onKeyDown={e => e.key === "Enter" && check()} /><button onClick={check} style={btnStyle()}>CHECK</button></div>
         {result && <div style={{ marginTop: 12, animation: "fadeIn .3s ease" }}><InfoBox color={result.pwned ? "#ff3355" : "#00ff88"}>{result.pwned ? `🔴 PWNED — Found in ${result.hits.length} breach${result.hits.length > 1 ? "es" : ""}` : "✅ No breaches found"}</InfoBox>{result.pwned && result.hits.map((b, i) => <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 12px", background: dark ? "#080814" : "#fff", borderRadius: 5, marginTop: 6, border: "1px solid #1a1a30" }}><span style={{ fontFamily: MONO, fontSize: 12, color: "#8899bb" }}>{b.domain}</span><div style={{ display: "flex", gap: 8 }}><span style={{ fontSize: 10, color: "#445" }}>{b.n} records</span><Tag color="#ffcc00">{b.y}</Tag></div></div>)}</div>}
       </div>
     </Card>
