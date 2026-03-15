@@ -45,6 +45,8 @@ body[data-theme="dark"] [style*="color:#667"]{
 @keyframes pulse{0%,100%{transform:scale(.85);opacity:.6}50%{transform:scale(1.2);opacity:1}}
 @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 @keyframes blipPulse{0%{transform:scale(.7);opacity:.7}50%{transform:scale(1.3);opacity:1}100%{transform:scale(.7);opacity:.7}}
+@keyframes splashIn{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}
+@keyframes splashOut{from{opacity:1}to{opacity:0}}
 @media (max-width: 900px){
   :root{
     --pg-btn-wrap: normal;
@@ -106,6 +108,7 @@ function AppShell() {
   const [incidents, setIncidents] = useState([]);
   const [isMobile, setIsMobile] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [showSplash, setShowSplash] = useState(true);
   const { addEntry } = useAnalyst();
 
   const sidebarWidth = 300;
@@ -194,6 +197,16 @@ function AppShell() {
     document.body.dataset.theme = dark ? "dark" : "light";
   }, [dark]);
 
+  useEffect(() => {
+    if (!isMobile) {
+      setShowSplash(false);
+      return;
+    }
+    setShowSplash(true);
+    const t = setTimeout(() => setShowSplash(false), 650);
+    return () => clearTimeout(t);
+  }, [isMobile]);
+
   const trigger = useCallback(
     payload => {
       const meta = {
@@ -220,6 +233,27 @@ function AppShell() {
     <ThemeCtx.Provider value={themeValue}>
       <style>{GLOBAL_STYLES}</style>
       <div style={styles.root}>
+        {showSplash && (
+          <div
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 9998,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "radial-gradient(circle at 30% 20%, #1a0b16 0%, #0a0712 45%, #05050a 100%)",
+              animation: "splashIn .25s ease-out"
+            }}
+          >
+            <BrandMark size={120} />
+            <div style={{ marginTop: 18, textAlign: "center" }}>
+              <div style={{ fontWeight: 950, fontSize: 24, letterSpacing: 3, color: "#fff", lineHeight: 1 }}>PHISHGUARD</div>
+              <div style={{ fontSize: 10, letterSpacing: 4, color: "#ff3355", fontWeight: 900, marginTop: 6 }}>SOC ANALYTICS ENGINE</div>
+            </div>
+          </div>
+        )}
         <AlertOverlay level={alert} onDismiss={() => setAlert(null)} />
         {isMobile && sidebarOpen && (
           <div
