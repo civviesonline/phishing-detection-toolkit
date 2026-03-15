@@ -103,6 +103,26 @@ export function URLScanner({ onTrigger, sound }) {
         <button style={{ ...btnStyle(), width: isMobile ? "100%" : "auto" }} onClick={() => runScan()}>
           {scanning ? "SCANNING…" : "SCAN URL"}
         </button>
+        {url && (
+          <button
+            style={{
+              ...btnStyle("#1a1a30"),
+              boxShadow: "none",
+              border: "1px solid #2a2a50",
+              width: isMobile ? "100%" : "auto"
+            }}
+            onClick={() => {
+              setUrl("");
+              setRes(null);
+              setDrawer(null);
+              setIoc(null);
+              setEnrichment(null);
+              setArtifacts(null);
+            }}
+          >
+            CLEAR
+          </button>
+        )}
       </div>
       <div style={{ fontSize: 13, color: "#445", marginTop: 6, letterSpacing: 1 }}>Tip: Press Ctrl+Enter to scan</div>
       {scanning && <Card style={{ marginTop: 16, position: "relative", overflow: "hidden", height: 90, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8 }}><div style={{ position: "absolute", left: 0, right: 0, height: 2, background: "linear-gradient(90deg,transparent,#ff3355,transparent)", animation: "shimmer 1s linear infinite" }} /><Spinner /><span style={{ fontSize: 12, color: "#445", letterSpacing: 4 }}>ANALYZING THREAT VECTORS...</span></Card>}
