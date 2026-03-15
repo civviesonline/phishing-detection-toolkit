@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useTheme, Card, Label, Spinner, ResultCard, btnStyle, Flag, InfoBox, Tag, ThreatIntelligencePanel } from "../shared/UI";
 import { SitePreview } from "../shared/SitePreview";
 import { MONO, SYNE, BREACHES, RISK_CFG, CUSTOM_DOMAINS, CUSTOM_KW } from "../../data/constants";
@@ -37,20 +37,44 @@ const sampleButtonStyle = (dark, variant) => {
 export function URLScanner({ onTrigger, sound }) {
   const { dark, isMobile } = useTheme();
   const [url, setUrl] = useState(""), [res, setRes] = useState(null), [scanning, setScanning] = useState(false);
+  const scanTimer = useRef(null);
   const inp = { width: "100%", background: dark ? "#0a0a18" : "#f5f6fc", border: `1px solid ${dark ? "#1a1a38" : "#dde0f0"}`, borderRadius: 7, padding: "13px 17px", fontFamily: MONO, fontSize: 16, color: dark ? "#c8d0e0" : "#1a1a38", outline: "none", boxSizing: "border-box" };
-  const scan = () => {
-    if (!url.trim()) return;
+  const runScan = (value) => {
+    const target = (value ?? url).trim();
+    if (!target) return;
+    if (scanTimer.current) {
+      clearTimeout(scanTimer.current);
+    }
     setScanning(true);
     setRes(null);
-    setTimeout(() => {
-      const r = analyzeURL(url.trim(), CUSTOM_DOMAINS, CUSTOM_KW);
+    if (value !== undefined) setUrl(value);
+    try {
+      const r = analyzeURL(target, CUSTOM_DOMAINS, CUSTOM_KW);
       setRes(r);
-      setScanning(false);
       onTrigger?.({ type: "url", risk: r.risk, score: r.score, domain: r.domain, summary: r.flags?.[0] ?? "URL analysis", detail: r });
       playSound(r.risk);
-    }, 900);
+    } catch (err) {
+      setRes({
+        score: 100,
+        risk: "DANGER",
+        flags: ["Scan error — unable to analyze URL"],
+        domain: target,
+        raw: target,
+        intelligence: {
+          tactic: "Analysis Failure",
+          intent: "Unknown",
+          recommendation: "Retry the scan or verify the URL manually.",
+          technicalDetail: String(err?.message || err)
+        }
+      });
+    } finally {
+      scanTimer.current = setTimeout(() => setScanning(false), 120);
+    }
   };
-  useEffect(() => { const h = e => { if ((e.ctrlKey || e.metaKey) && e.key === "Enter") scan(); }; window.addEventListener("keydown", h); return () => window.removeEventListener("keydown", h); }, [url]);
+  useEffect(() => () => {
+    if (scanTimer.current) clearTimeout(scanTimer.current);
+  }, []);
+  useEffect(() => { const h = e => { if ((e.ctrlKey || e.metaKey) && e.key === "Enter") runScan(); }; window.addEventListener("keydown", h); return () => window.removeEventListener("keydown", h); }, [url]);
   return (
     <div>
       <Label>Paste any URL to scan for phishing indicators</Label>
@@ -60,15 +84,15 @@ export function URLScanner({ onTrigger, sound }) {
           placeholder="https://suspicious-site.xyz/verify..."
           value={url}
           onChange={e => { setUrl(e.target.value); setRes(null); }}
-          onKeyDown={e => e.key === "Enter" && scan()}
+          onKeyDown={e => e.key === "Enter" && runScan()}
         />
-        <button style={{ ...btnStyle(), width: isMobile ? "100%" : "auto" }} onClick={scan}>
+        <button style={{ ...btnStyle(), width: isMobile ? "100%" : "auto" }} onClick={() => runScan()}>
           {scanning ? "SCANNING…" : "SCAN URL"}
         </button>
       </div>
       <div style={{ fontSize: 13, color: "#445", marginTop: 6, letterSpacing: 1 }}>Tip: Press Ctrl+Enter to scan</div>
       {scanning && <Card style={{ marginTop: 16, position: "relative", overflow: "hidden", height: 90, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8 }}><div style={{ position: "absolute", left: 0, right: 0, height: 2, background: "linear-gradient(90deg,transparent,#ff3355,transparent)", animation: "shimmer 1s linear infinite" }} /><Spinner /><span style={{ fontSize: 12, color: "#445", letterSpacing: 4 }}>ANALYZING THREAT VECTORS...</span></Card>}
-      {res && !scanning && <>
+      {res && <>
         <ResultCard result={res} />
         <ThreatIntelligencePanel intelligence={res.intelligence} risk={res.risk} />
         <SitePreview url={url || res.domain} risk={res.risk} label="Live Preview" hint={res.risk === "SAFE" ? "Verified for this scan" : "Isolate before visiting"} />
@@ -85,7 +109,7 @@ export function URLScanner({ onTrigger, sound }) {
                 {group.urls.map(ex => (
                   <button
                     key={ex}
-                    onClick={() => { setUrl(ex); setRes(null); }}
+                    onClick={() => { runScan(ex); }}
                     style={sampleButtonStyle(dark, group.variant)}
                   >
                     {group.variant === "alert" && ex.length > 40 ? ex.slice(0, 40) + "…" : ex}
@@ -104,7 +128,7 @@ function DNSGeoPanel({ domain }) {
   const { dark } = useTheme();
   const [tab, setTab] = useState("geo"), [ready, setReady] = useState(false);
   const geo = fakeGeo(domain), dns = fakeDNS(domain);
-  useEffect(() => { setReady(false); const t = setTimeout(() => setReady(true), 600); return () => clearTimeout(t); }, [domain]);
+  useEffect(() => { setReady(true); }, [domain]);
   if (!ready) return <Card style={{ marginTop: 16 }}><div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0" }}><Spinner color="#6644ff" size={16} /><span style={{ fontSize: 13, color: "#445", letterSpacing: 3 }}>RESOLVING DNS & GEOIP...</span></div></Card>;
   const geoRows = [["🌐", "IP", geo.ip], ["📍", "Country", `${geo.flag} ${geo.country}`], ["🏙", "City", geo.city], ["🖧", "ISP", geo.isp], ["🔢", "ASN", geo.asn], ["📋", "Registrar", geo.registrar], ["📅", "Age", `${geo.age}yr${geo.age !== 1 ? "s" : ""}${geo.newDomain ? " ⚠" : ""}`, geo.newDomain], ["🗓", "Created", geo.created]];
   return (
@@ -119,7 +143,7 @@ function DNSGeoPanel({ domain }) {
 function BreachPanel({ domain }) {
   const { dark } = useTheme();
   const [ready, setReady] = useState(false), [input, setInput] = useState(""), [result, setResult] = useState(null);
-  useEffect(() => { setReady(false); const t = setTimeout(() => setReady(true), 800); return () => clearTimeout(t); }, [domain]);
+  useEffect(() => { setReady(true); }, [domain]);
   const check = () => { if (!input.trim()) return; const h = hashStr(input), keys = Object.keys(BREACHES); const hits = [...new Set([0, 1, 2].map(i => keys[(h + i * 7) % keys.length]))].map(k => ({ domain: k, ...BREACHES[k] })); setResult({ hits, pwned: hits.length > 0 }); };
   const domHits = Object.entries(BREACHES).filter(([d]) => domain?.endsWith(d));
   if (!ready) return <Card style={{ marginTop: 16 }}><div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0" }}><Spinner color="#ff3355" size={16} /><span style={{ fontSize: 13, color: "#445", letterSpacing: 3 }}>SCANNING BREACH DATABASE...</span></div></Card>;

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useTheme, Card, Label, Spinner, Tag, btnStyle, ScoreBar } from "../shared/UI";
 import { MONO, SYNE, RISK_CFG, CUSTOM_DOMAINS, CUSTOM_KW } from "../../data/constants";
 import { analyzeURL, playSound } from "../../utils/analysis";
@@ -6,14 +6,17 @@ import { analyzeURL, playSound } from "../../utils/analysis";
 export function BulkScanner({ onTrigger }) {
   const { dark } = useTheme();
   const [input, setInput] = useState(""), [results, setResults] = useState([]), [scanning, setScanning] = useState(false);
+  const scanTimer = useRef(null);
   const run = () => {
     const urls = input.split(/\n|,/).map(s => s.trim()).filter(s => s.length > 3);
     if (!urls.length) return;
+    if (scanTimer.current) {
+      clearTimeout(scanTimer.current);
+    }
     setScanning(true); setResults([]);
-    setTimeout(() => {
+    try {
       const res = urls.map(u => ({ url: u, ...analyzeURL(u, CUSTOM_DOMAINS, CUSTOM_KW) }));
       setResults(res);
-      setScanning(false);
       const rank = { SAFE: 0, SUSPICIOUS: 1, DANGER: 2 };
       const maxRisk = res.reduce((acc, entry) => (rank[entry.risk] > rank[acc] ? entry.risk : acc), "SAFE");
       const avgScore = Math.round(res.reduce((sum, entry) => sum + (entry.score || 0), 0) / res.length);
@@ -25,8 +28,13 @@ export function BulkScanner({ onTrigger }) {
         detail: res
       });
       playSound(maxRisk);
-    }, 1200);
+    } finally {
+      scanTimer.current = setTimeout(() => setScanning(false), 120);
+    }
   };
+  useEffect(() => () => {
+    if (scanTimer.current) clearTimeout(scanTimer.current);
+  }, []);
   return (
     <div>
       <Label>Analyze multiple URLs at once (newline or comma separated)</Label>

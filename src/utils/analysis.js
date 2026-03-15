@@ -116,10 +116,10 @@ export function analyzeURL(raw, CUSTOM_DOMAINS=[], CUSTOM_KW=[]){
   spoofHits.forEach(m=>{score+=m.v;flags.push(`Brand spoofing — ${m.r}`);});
   
   score=Math.min(score,100);
-  const risk = score<25?"SAFE":score<55?"SUSPICIOUS":"DANGER";
+  let risk = score<25?"SAFE":score<55?"SUSPICIOUS":"DANGER";
 
   // --- Deep Threat Intelligence ---
-  const intelligence = {
+  let intelligence = {
     tactic: "Unknown",
     intent: "Generic Analysis",
     recommendation: "Review the flags and verify the source manually.",

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useTheme, Card, Label, Spinner, Tag, btnStyle, ScoreBar, Flag, TrafficLight, ConfidenceMeter } from "../shared/UI";
 import { MONO, SYNE, RISK_CFG } from "../../data/constants";
 import { analyzeObfuscatedLink } from "../../utils/analysis";
@@ -9,7 +9,25 @@ let CUSTOM_DOMAINS = [], CUSTOM_KW = [];
 export function LinkDeobfuscator({ onTrigger }) {
   const { dark } = useTheme();
   const [url, setUrl] = useState(""), [res, setRes] = useState(null), [scanning, setScanning] = useState(false);
-  const run = () => { if (!url.trim()) return; setScanning(true); setRes(null); setTimeout(() => { const r = analyzeObfuscatedLink(url.trim(), CUSTOM_DOMAINS, CUSTOM_KW); setRes(r); setScanning(false); onTrigger(r.risk); }, 1100); };
+  const scanTimer = useRef(null);
+  const run = () => {
+    if (!url.trim()) return;
+    if (scanTimer.current) {
+      clearTimeout(scanTimer.current);
+    }
+    setScanning(true);
+    setRes(null);
+    try {
+      const r = analyzeObfuscatedLink(url.trim(), CUSTOM_DOMAINS, CUSTOM_KW);
+      setRes(r);
+      onTrigger(r.risk);
+    } finally {
+      scanTimer.current = setTimeout(() => setScanning(false), 120);
+    }
+  };
+  useEffect(() => () => {
+    if (scanTimer.current) clearTimeout(scanTimer.current);
+  }, []);
   return (
     <div>
       <Label>Unmask hidden redirect chains and encoded URLs</Label>

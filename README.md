@@ -1,128 +1,88 @@
-PhishGuard SOC Edition
+# PhishGuard SOC Edition
 
-https://img.shields.io/badge/version-1.0.0-blue
-https://img.shields.io/badge/React-18.x-61dafb
+PhishGuard is a browser-based phishing analysis and training cockpit built with React and Vite. It bundles interactive scanners, analyst-focused insights, and training drills into a single front-end experience.
 
-PhishGuard is a browser-based phishing detection toolkit for security analysts. It combines automated threat scanning with interactive training modules.
-✨ Features
-Detection Tools
+## Current Modules
 
-    URL Scanner – Analyzes URLs for suspicious TLDs, brand spoofing, typosquatting, and URL shorteners
+### Detection
+- URL Scanner: heuristic scoring for suspicious TLDs, spoofing patterns, typosquatting, shorteners, and keywords
+- Email Analyzer: body parsing, keyword/urgency detection, URL scanning, and redirect deobfuscation
+- QR Scanner: camera or image upload decoding with URL analysis
+- Attachment Scorer: filename heuristics for double extensions and risky types
+- Homoglyph Detector: Unicode lookalike detection for IDN spoofing
+- Bulk Scanner: batch URL scoring
 
-    Email Analyzer – Scans email bodies for phishing keywords, urgency language, and suspicious links
+### Training
+- Awareness Quiz
+- Scenario Drills
 
-    Header Analyzer – Validates SPF, DKIM, DMARC and detects header anomalies
+### Insights
+- Live Attack Feed (simulated)
+- Incident Correlation timeline
+- Analyst Dashboard (session history, pins, recommendations)
+- CLI Log Bridge (copy log line and JSON export)
 
-    QR Scanner – Decodes QR codes and analyzes embedded URLs
+### Admin
+- Blocklist Manager for custom blocklist and allowlist entries
 
-    Attachment Scorer – Detects malicious filenames (double extensions, executables)
+## How Scoring Works
+All scanners generate a 0–100 threat score and map it to a risk band:
+- SAFE: 0–24
+- SUSPICIOUS: 25–54
+- DANGER: 55–100
 
-    Homoglyph Detector – Identifies Unicode lookalike attacks
+Each scan returns a score, risk label, and a list of indicators. The URL and Email modules also surface deeper context panels and recommendations based on the detected signals.
 
-    Bulk Scanner – Processes multiple URLs at once
+## Data and Privacy Notes
+- Runs entirely in the browser; no backend required.
+- DNS/Geo panels and breach checks are simulated using local datasets (no live external lookups).
+- Site preview uses third-party screenshot services.
+- QR scanning loads `html5-qrcode` from a CDN at runtime.
 
-Training
-
-    Awareness Quiz – 200+ questions on phishing tactics
-
-    Scenario Drills – Timed triage exercises with real-world examples
-
-Customization
-
-    Blocklist Manager – Add custom domains and keywords
-
-🚀 Quick Start
-bash
-
+## Quick Start
+```bash
 git clone https://github.com/yourusername/phishguard.git
 cd phishguard
 npm install
-npm start
+npm run dev
+```
+App runs at `http://127.0.0.1:5173`.
 
-App runs at http://localhost:3000
-🛡️ How It Works
-Risk Level	Score	Action
-SAFE	0-24	No indicators
-SUSPICIOUS	25-54	Verify carefully
-DANGER	55-100	Do not proceed
+## Scripts
+```bash
+npm run dev     # start dev server
+npm run build   # production build
+npm run preview # preview production build
+```
 
-Each scan returns:
+## Deployment
+Vercel settings that match the current app:
+- Framework Preset: Vite
+- Build Command: `npm run build`
+- Output Directory: `dist`
+- Root Directory: repository root
 
-    Threat score (0-100)
-
-    Color-coded traffic light
-
-    List of specific indicators
-
-    Detailed explanations
-
-🔍 Detection Highlights
-
-    Domains: IP addresses, suspicious TLDs, excessive subdomains, domain age
-
-    Brand Spoofing: Leet substitution, typosquatting, brand impersonation
-
-    Email Auth: SPF/DKIM/DMARC validation, Reply-To mismatches
-
-    Attachments: Executables, macro-enabled files, double extensions
-
-    Infrastructure: GeoIP, DNS records, breach database lookup
-
-🏗️ Tech Stack
-
-    React 18
-
-    Context API
-
-    Web Audio API
-
-    Canvas API
-
-    Levenshtein distance algorithm
-
-    Homoglyph detection
-
-📁 Structure
-text
-
+## Project Structure
+```
 src/
-├── App.js
-├── components/
-│   ├── scanners/     # Detection panels
-│   ├── training/      # Quiz & drills
-│   └── shared/        # UI components
-├── utils/             # Analysis logic
-└── data/              # Constants & breach data
+  App.jsx
+  components/
+    scanners/
+    training/
+    insights/
+    shared/
+  contexts/
+  data/
+  utils/
+```
 
-⚡ Test Examples
-bash
+## CLI Helper
+`./launch-phishguard.sh` can start the dev server and open the app. It also supports:
+```bash
+./launch-phishguard.sh --scan-log phishguard-cli-log.json
+```
 
-# SAFE
-https://google.com
-https://github.com/login
-
-# DANGER
-http://secure-paypal-verify.xyz/login
-https://amaz0n-account-billing-update.click
-
-🔐 Security
-
-    100% client-side – No data sent to external servers
-
-    No tracking or telemetry
-
-    Optional thumbnail previews (can be disabled)
-
-🤝 Contribute
-
-    Fork repo
-
-    Create branch (git checkout -b feature/name)
-
-    Commit changes
-
-    Push and open PR
-
-📄 License
-
-MIT © PhishGuard
+## Contributing
+- Fork the repo
+- Create a feature branch
+- Open a PR with a clear description and screenshots where relevant
