@@ -21,6 +21,10 @@ export function QRScanner({ onTrigger }) {
   const [dragOver, setDragOver] = useState(false);
   const [preview, setPreview] = useState(null);
   const [cameraOn, setCameraOn] = useState(false);
+  const [encodeText, setEncodeText] = useState("");
+  const [barcodeType, setBarcodeType] = useState("qr");
+  const [barcodeSize, setBarcodeSize] = useState(260);
+  const [barcodeSrc, setBarcodeSrc] = useState("");
   
   const fileRef = useRef(null);
   const scannerRef = useRef(null); // Html5Qrcode instance
@@ -50,6 +54,15 @@ export function QRScanner({ onTrigger }) {
       }
     }
     setCameraOn(false);
+  };
+
+  const buildBarcodeSrc = () => {
+    const value = encodeText.trim();
+    if (!value) return "";
+    if (barcodeType === "qr") {
+      return `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(value)}&size=${barcodeSize}x${barcodeSize}`;
+    }
+    return `https://bwipjs-api.metafloor.com/?bcid=code128&text=${encodeURIComponent(value)}&scale=2&height=12&includetext`;
   };
 
   const startCamera = async () => {
@@ -247,6 +260,88 @@ export function QRScanner({ onTrigger }) {
                       ⚠️ DIRECT LINK DISABLED — THREAT DETECTED
                     </div>
                   )}
+                </div>
+              </div>
+            )}
+          </Card>
+
+          <Card>
+            <Label>URL to Barcode / QR</Label>
+            <div style={{ fontSize: 12, color: "#667", marginBottom: 10 }}>
+              Generate a scannable code for any URL or text.
+            </div>
+            <div className="pg-row" style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+              <input
+                style={{ flex: 1, minWidth: 0, background: dark ? "#0a0a18" : "#f5f6fc", border: "1px solid #1a1a30", borderRadius: 6, padding: "12px 14px", color: dark ? "#c8d0e0" : "#1a1a38", fontFamily: MONO, fontSize: 13, outline: "none", boxSizing: "border-box" }}
+                placeholder="https://example.com/login"
+                value={encodeText}
+                onChange={e => setEncodeText(e.target.value)}
+              />
+              <button
+                style={btnStyle("#22aaff")}
+                onClick={() => {
+                  const src = buildBarcodeSrc();
+                  setBarcodeSrc(src);
+                }}
+              >
+                GENERATE
+              </button>
+            </div>
+
+            <div className="pg-row" style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+              <select
+                value={barcodeType}
+                onChange={e => {
+                  const next = e.target.value;
+                  setBarcodeType(next);
+                  if (barcodeSrc) {
+                    setBarcodeSrc(next === "qr"
+                      ? `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(encodeText.trim())}&size=${barcodeSize}x${barcodeSize}`
+                      : `https://bwipjs-api.metafloor.com/?bcid=code128&text=${encodeURIComponent(encodeText.trim())}&scale=2&height=12&includetext`);
+                  }
+                }}
+                style={{ flex: 1, minWidth: 0, background: dark ? "#0a0a18" : "#f5f6fc", border: "1px solid #1a1a30", borderRadius: 6, padding: "10px 12px", color: dark ? "#c8d0e0" : "#1a1a38", fontFamily: MONO, fontSize: 12, outline: "none" }}
+              >
+                <option value="qr">QR Code</option>
+                <option value="code128">Barcode (Code 128)</option>
+              </select>
+              <select
+                value={barcodeSize}
+                onChange={e => {
+                  const next = Number(e.target.value);
+                  setBarcodeSize(next);
+                  if (barcodeSrc && barcodeType === "qr") {
+                    setBarcodeSrc(`https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(encodeText.trim())}&size=${next}x${next}`);
+                  }
+                }}
+                style={{ flex: 1, minWidth: 0, background: dark ? "#0a0a18" : "#f5f6fc", border: "1px solid #1a1a30", borderRadius: 6, padding: "10px 12px", color: dark ? "#c8d0e0" : "#1a1a38", fontFamily: MONO, fontSize: 12, outline: "none" }}
+              >
+                <option value={220}>Small</option>
+                <option value={260}>Medium</option>
+                <option value={320}>Large</option>
+              </select>
+            </div>
+
+            {!barcodeSrc && (
+              <div style={{ textAlign: "center", padding: "18px 0", color: "#667", fontSize: 12 }}>
+                Enter a URL and click Generate to preview.
+              </div>
+            )}
+
+            {barcodeSrc && (
+              <div style={{ border: "1px solid #1a1a30", borderRadius: 8, padding: 12, background: dark ? "#0d0d1e" : "#f8f9ff" }}>
+                <img
+                  src={barcodeSrc}
+                  alt="Generated code"
+                  style={{ width: "100%", height: "auto", display: "block", borderRadius: 6 }}
+                />
+                <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+                  <a href={barcodeSrc} target="_blank" rel="noreferrer" style={{ ...btnStyle("#1a1a30"), textDecoration: "none", display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "8px 14px", fontSize: 11, boxShadow: "none", border: "1px solid #2a2a50" }}>
+                    OPEN IMAGE
+                  </a>
+                  <a href={barcodeSrc} download style={{ ...btnStyle("#00ff88"), textDecoration: "none", display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "8px 14px", fontSize: 11 }}>
+                    DOWNLOAD
+                  </a>
                 </div>
               </div>
             )}
