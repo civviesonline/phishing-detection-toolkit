@@ -5,17 +5,20 @@ import { analyzeEmail, playSound } from "../../utils/analysis";
 
 export function EmailAnalyzer({ onTrigger }) {
   const { dark, isMobile } = useTheme();
-  const [email, setEmail] = useState(""), [res, setRes] = useState(null);
+  const [from, setFrom] = useState("");
+  const [subject, setSubject] = useState("");
+  const [body, setBody] = useState("");
+  const [res, setRes] = useState(null);
   const inp = { width: "100%", background: dark ? "#0a0a18" : "#f5f6fc", border: `1px solid ${dark ? "#1a1a38" : "#dde0f0"}`, borderRadius: 7, padding: "13px 17px", fontFamily: MONO, fontSize: 16, color: dark ? "#c8d0e0" : "#1a1a38", outline: "none", boxSizing: "border-box" };
   const scan = () => {
-    if (!email.trim()) return;
-    const r = analyzeEmail(email, CUSTOM_DOMAINS, CUSTOM_KW);
+    if (!from.trim() && !subject.trim() && !body.trim()) return;
+    const r = analyzeEmail({ from, subject, body }, CUSTOM_DOMAINS, CUSTOM_KW);
     setRes(r);
     onTrigger?.({
       type: "email",
       risk: r.risk,
       score: r.score,
-      summary: r.senderFlags?.[0] || "Email threat analysis",
+      summary: r.senderFlags?.[0] || subject || "Email threat analysis",
       detail: r,
       domain: r.scannedLinks?.[0]?.domain
     });
@@ -23,8 +26,12 @@ export function EmailAnalyzer({ onTrigger }) {
   };
   return (
     <div>
-      <Label>Paste suspicious email body for threat analysis</Label>
-      <textarea style={{ ...inp, minHeight: 160, resize: "vertical", lineHeight: 1.7 }} placeholder={"Paste email content here...\n\nExample: Dear Customer, your account has been suspended. Click immediately to verify within 24 hours."} value={email} onChange={e => { setEmail(e.target.value); setRes(null); }} />
+      <Label>Analyze email sender, subject, and body</Label>
+      <div className="pg-row" style={{ display: "flex", gap: 10, marginBottom: 10 }}>
+        <input style={{ ...inp, fontSize: 13 }} placeholder="From: Google Play <noreply@google.com>" value={from} onChange={e => { setFrom(e.target.value); setRes(null); }} />
+        <input style={{ ...inp, fontSize: 13 }} placeholder="Subject: Your Google Play order receipt" value={subject} onChange={e => { setSubject(e.target.value); setRes(null); }} />
+      </div>
+      <textarea style={{ ...inp, minHeight: 160, resize: "vertical", lineHeight: 1.7 }} placeholder={"Paste email body here...\n\nExample: Thanks for your purchase. View your receipt at https://play.google.com/..." } value={body} onChange={e => { setBody(e.target.value); setRes(null); }} />
       <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: 10, marginTop: 10, alignItems: isMobile ? "stretch" : "center" }}>
         <button style={{ ...btnStyle("#ff9900"), width: isMobile ? "100%" : "auto" }} onClick={scan}>ANALYZE EMAIL</button>
         {res && (
@@ -36,7 +43,9 @@ export function EmailAnalyzer({ onTrigger }) {
               width: isMobile ? "100%" : "auto"
             }}
             onClick={() => {
-              setEmail("");
+              setFrom("");
+              setSubject("");
+              setBody("");
               setRes(null);
             }}
           >
@@ -85,7 +94,7 @@ export function EmailAnalyzer({ onTrigger }) {
           })}
           </div>}
         </Card>
-        {email && <Card style={{ marginTop: 12 }}><Label>Annotated Content</Label><AnnotatedText text={email} result={res} /></Card>}
+        {body && <Card style={{ marginTop: 12 }}><Label>Annotated Content</Label><AnnotatedText text={body} result={res} /></Card>}
       </div>}
     </div>
   );

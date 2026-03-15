@@ -169,13 +169,19 @@ export function analyzeURL(raw, CUSTOM_DOMAINS=[], CUSTOM_KW=[]){
   return {score, risk, flags, domain:dom, raw, intelligence};
 }
 
-export function analyzeEmail(text, CUSTOM_DOMAINS=[], CUSTOM_KW=[]){
-  const lo=text.toLowerCase();
+export function analyzeEmail(input, CUSTOM_DOMAINS=[], CUSTOM_KW=[]){
+  const payload = typeof input === "string" ? { body: input } : (input || {});
+  const from = payload.from || "";
+  const subject = payload.subject || "";
+  const body = payload.body || "";
+  const combined = `${from}\n${subject}\n${body}`;
+  const lo = combined.toLowerCase();
   const riskRank={SAFE:0,SUSPICIOUS:1,DANGER:2};
   const keywords=KW.filter(k=>lo.includes(k));
   const urgency=["asap","immediately","right now","24 hours","within hours","expires","limited time","act now","today only"].filter(k=>lo.includes(k));
-  const hasAttach=/\.exe|\.zip|invoice|attachment|\.doc|\.js|\.bat/i.test(text);
-  const urls=[...text.matchAll(/https?:\/\/[^\s<>"')]+/gi)].map(m=>m[0].replace(/[.,;:!?]+$/,""));
+  const TRANSACTIONAL_KW = ["invoice","receipt","order-confirmation","payment-advice","subscription-renewal","transaction","payment","order"];
+  const hasAttach=/\b[\w-]+\.(exe|zip|docm|xlsm|pptm|js|bat|scr|hta|iso|img|rar|7z)\b/i.test(body);
+  const urls=[...combined.matchAll(/https?:\/\/[^\s<>"')]+/gi)].map(m=>m[0].replace(/[.,;:!?]+$/,""));
   const scannedLinks=urls.map(u=>{
     const direct=analyzeURL(u, CUSTOM_DOMAINS, CUSTOM_KW);
     const deob=analyzeObfuscatedLink(u, CUSTOM_DOMAINS, CUSTOM_KW);
@@ -188,16 +194,22 @@ export function analyzeEmail(text, CUSTOM_DOMAINS=[], CUSTOM_KW=[]){
     deob.flags.forEach(f=>mergedFlags.push(`Deobfuscation — ${f}`));
     return{url:u,...direct,score:finalScore,risk:finalRisk,flags:[...new Set(mergedFlags)],direct,deob};
   });
-  const senderDom=text.match(/<([^>]+@[^>]+)>/)?.[1]?.split("@")[1]?.toLowerCase();
+  const senderDom=(from.match(/<([^>]+@[^>]+)>/)?.[1] || from.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/i)?.[0] || combined.match(/<([^>]+@[^>]+)>/)?.[1] || combined.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/i)?.[0] || "").split("@")[1]?.toLowerCase();
+  const safeSender = senderDom ? SAFE_DOMAINS.some(d => senderDom === d || senderDom.endsWith("." + d)) : false;
   const senderFlags=!senderDom?[]:BRANDS.flatMap(td=>{const b=td.split(".")[0],out=[];if(senderDom.includes(b)&&!senderDom.endsWith(td))out.push(`Sender spoofs "${b}": ${senderDom}`);if(BAD_TLDS.some(t=>senderDom.endsWith(t)))out.push(`Sender TLD suspicious: .${senderDom.split(".").pop()}`);return out;});
   const danger=scannedLinks.filter(l=>l.risk==="DANGER"),susp=scannedLinks.filter(l=>l.risk!=="SAFE");
   const hiddenRedirects=scannedLinks.filter(l=>l.deob?.hopCount>0).length;
   const deobEscalations=scannedLinks.filter(l=>riskRank[l.deob?.finalAnalysis?.risk||"SAFE"]>riskRank[l.direct?.risk||"SAFE"]).length;
-  const score=Math.min(keywords.length*6+urgency.length*10+(urls.length>2?15:0)+(hasAttach?20:0)+susp.length*18+danger.length*30+senderFlags.length*25+hiddenRedirects*12+deobEscalations*15,100);
-  const risk = score<20?"SAFE":score<50?"SUSPICIOUS":"DANGER";
+  const transHits = keywords.filter(k => TRANSACTIONAL_KW.includes(k));
+  const phishHits = keywords.filter(k => !TRANSACTIONAL_KW.includes(k));
+  const kwScore = phishHits.length * 6 + transHits.length * (safeSender ? 1 : 3);
+  const urgencyScore = urgency.length * (safeSender ? 4 : 10);
+  const urlPenalty = urls.length > 2 ? (safeSender ? 5 : 15) : 0;
+  let score=Math.min(kwScore+urgencyScore+urlPenalty+(hasAttach?20:0)+susp.length*18+danger.length*30+senderFlags.length*25+hiddenRedirects*12+deobEscalations*15,100);
+  let risk = score<20?"SAFE":score<50?"SUSPICIOUS":"DANGER";
 
   // --- Campaign Intelligence ---
-  const intelligence = {
+  let intelligence = {
     tactic: "Multi-Vector Phishing",
     intent: "Campaign Level Analysis",
     recommendation: "Flag this email pattern in the SEG (Secure Email Gateway) and perform a wide-scale search for similar messages.",
@@ -227,7 +239,19 @@ export function analyzeEmail(text, CUSTOM_DOMAINS=[], CUSTOM_KW=[]){
     intelligence.recommendation = "No response required. The email follows standard safe patterns.";
   }
 
-  return {score, risk, keywords, urgency, linkCount:urls.length, hasAttach, scannedLinks, senderFlags, hiddenRedirects, deobEscalations, intelligence};
+  if (safeSender && senderFlags.length === 0 && scannedLinks.every(l => l.risk === "SAFE")) {
+    score = Math.min(score, 18);
+    risk = "SAFE";
+    senderFlags.push(`Allowlisted sender domain: ${senderDom}`);
+    intelligence = {
+      tactic: "Verified Sender",
+      intent: "Legitimate Transactional Email",
+      recommendation: "Sender and links match allowlisted domains. No action required.",
+      technicalDetail: "Allowlisted sender domain and SAFE link analysis reduce overall risk."
+    };
+  }
+
+  return {score, risk, keywords, urgency, linkCount:urls.length, hasAttach, scannedLinks, senderFlags, hiddenRedirects, deobEscalations, intelligence, from, subject, body};
 }
 
 export function analyzeAttachment(filename){
