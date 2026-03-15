@@ -23,6 +23,7 @@ ${FONTS}
   --pg-btn-wrap: nowrap;
   --pg-btn-letter: 2px;
   --pg-btn-pad-x: 22px;
+  --pg-muted-dark: #9aa6c7;
 }
 html,body,#root{
   margin:0;
@@ -32,6 +33,14 @@ html,body,#root{
   background:#05050a;
 }
 body{overflow-x:hidden;}
+body[data-theme="dark"] [style*="color: #445"],
+body[data-theme="dark"] [style*="color:#445"],
+body[data-theme="dark"] [style*="color: #556"],
+body[data-theme="dark"] [style*="color:#556"],
+body[data-theme="dark"] [style*="color: #667"],
+body[data-theme="dark"] [style*="color:#667"]{
+  color: var(--pg-muted-dark) !important;
+}
 *,*::before,*::after{box-sizing:border-box;}
 @keyframes pulse{0%,100%{transform:scale(.85);opacity:.6}50%{transform:scale(1.2);opacity:1}}
 @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
@@ -181,6 +190,10 @@ function AppShell() {
     if (!isMobile) setSidebarOpen(true);
   }, [isMobile]);
 
+  useEffect(() => {
+    document.body.dataset.theme = dark ? "dark" : "light";
+  }, [dark]);
+
   const trigger = useCallback(
     payload => {
       const meta = {
@@ -263,7 +276,7 @@ function AppShell() {
           </div>
         </div>
 
-        <div style={styles.content}>
+        <main style={styles.content} role="main" id="main-content">
           {isMobile && (
             <div style={{ position: "fixed", top: 0, left: 0, right: 0, height: 62, padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", background: dark ? "#0a0a14" : "#ffffff", borderBottom: `1px solid ${dark ? "#1a1a38" : "#dde0f0"}`, zIndex: 110 }}>
               <button onClick={() => setSidebarOpen(v => !v)} style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.3)", borderRadius: 8, padding: "6px 12px", color: dark ? "#fff" : "#1a1a38", fontWeight: 700 }}>
@@ -310,7 +323,7 @@ function AppShell() {
               {tab === "blocklist" && <BlocklistManager />}
             </div>
           </div>
-        </div>
+        </main>
       </div>
     </ThemeCtx.Provider>
   );
