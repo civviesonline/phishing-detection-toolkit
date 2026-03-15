@@ -15,6 +15,7 @@ import { AttackFeed } from "./components/insights/AttackFeed";
 import { MultiVectorCard } from "./components/insights/MultiVectorCard";
 import { AnalystDashboard } from "./components/insights/AnalystDashboard";
 import { CLIIntegration } from "./components/insights/CLIIntegration";
+import { IntelWorkspace } from "./components/insights/IntelWorkspace";
 
 const GLOBAL_STYLES = `
 ${FONTS}
@@ -77,7 +78,8 @@ const NAV = [
   {
     group: "Insights",
     items: [
-      { id: "insights", icon: "📡", label: "SOC Surface" }
+      { id: "insights", icon: "📡", label: "SOC Surface" },
+      { id: "intel", icon: "🧠", label: "Intel Lab" }
     ]
   },
   {
@@ -304,6 +306,7 @@ function AppShell() {
                   </div>
                 </div>
               )}
+              {tab === "intel" && <IntelWorkspace />}
               {tab === "blocklist" && <BlocklistManager />}
             </div>
           </div>

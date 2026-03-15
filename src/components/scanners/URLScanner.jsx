@@ -3,6 +3,9 @@ import { useTheme, Card, Label, Spinner, ResultCard, btnStyle, Flag, InfoBox, Ta
 import { SitePreview } from "../shared/SitePreview";
 import { MONO, SYNE, BREACHES, RISK_CFG, CUSTOM_DOMAINS, CUSTOM_KW } from "../../data/constants";
 import { analyzeURL, fakeGeo, fakeDNS, hashStr, playSound } from "../../utils/analysis";
+import { submitIOC, getDetonationArtifacts, getEnrichment } from "../../utils/api";
+import { IOCInspector } from "../insights/IOCInspector";
+import { DetonationChain } from "../insights/DetonationChain";
 
 const SAMPLE_GROUPS = [
   { title: "Requested Domains", urls: [
@@ -38,6 +41,10 @@ export function URLScanner({ onTrigger, sound }) {
   const { dark, isMobile } = useTheme();
   const [url, setUrl] = useState(""), [res, setRes] = useState(null), [scanning, setScanning] = useState(false);
   const scanTimer = useRef(null);
+  const [ioc, setIoc] = useState(null);
+  const [enrichment, setEnrichment] = useState(null);
+  const [artifacts, setArtifacts] = useState(null);
+  const [drawer, setDrawer] = useState(null);
   const inp = { width: "100%", background: dark ? "#0a0a18" : "#f5f6fc", border: `1px solid ${dark ? "#1a1a38" : "#dde0f0"}`, borderRadius: 7, padding: "13px 17px", fontFamily: MONO, fontSize: 16, color: dark ? "#c8d0e0" : "#1a1a38", outline: "none", boxSizing: "border-box" };
   const runScan = (value) => {
     const target = (value ?? url).trim();
@@ -47,12 +54,19 @@ export function URLScanner({ onTrigger, sound }) {
     }
     setScanning(true);
     setRes(null);
+    setDrawer(null);
     if (value !== undefined) setUrl(value);
     try {
       const r = analyzeURL(target, CUSTOM_DOMAINS, CUSTOM_KW);
       setRes(r);
+      setIoc(null);
+      setEnrichment(null);
+      setArtifacts(null);
       onTrigger?.({ type: "url", risk: r.risk, score: r.score, domain: r.domain, summary: r.flags?.[0] ?? "URL analysis", detail: r });
       playSound(r.risk);
+      submitIOC({ type: "url", value: target, analysis: r }).then(setIoc);
+      getEnrichment({ url: target, analysis: r }).then(setEnrichment);
+      getDetonationArtifacts({ url: target, analysis: r }).then(setArtifacts);
     } catch (err) {
       setRes({
         score: 100,
@@ -98,6 +112,10 @@ export function URLScanner({ onTrigger, sound }) {
         <SitePreview url={url || res.domain} risk={res.risk} label="Live Preview" hint={res.risk === "SAFE" ? "Verified for this scan" : "Isolate before visiting"} />
         <DNSGeoPanel domain={res.domain} />
         <BreachPanel domain={res.domain} />
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
+          <button style={btnStyle("#22aaff")} onClick={() => setDrawer("ioc")}>IOC INSPECTOR</button>
+          <button style={btnStyle("#6644ff")} onClick={() => setDrawer("detonation")}>DETONATION CHAIN</button>
+        </div>
       </>}
       <Card style={{ marginTop: 18 }}>
         <Label>Quick Test Examples</Label>
@@ -120,6 +138,41 @@ export function URLScanner({ onTrigger, sound }) {
           ))}
         </div>
       </Card>
+      {drawer && (
+        <>
+          <div
+            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", zIndex: 130 }}
+            onClick={() => setDrawer(null)}
+          />
+          <div
+            style={{
+              position: "fixed",
+              top: 0,
+              right: 0,
+              bottom: 0,
+              width: isMobile ? "100%" : 460,
+              background: dark ? "#0a0a1a" : "#ffffff",
+              borderLeft: `1px solid ${dark ? "#1a1a38" : "#dde0f0"}`,
+              zIndex: 140,
+              padding: isMobile ? "20px 16px" : "24px 22px",
+              overflowY: "auto"
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <div style={{ fontFamily: SYNE, fontWeight: 900, letterSpacing: 2, fontSize: 13, color: dark ? "#fff" : "#1a1a38" }}>
+                {drawer === "ioc" ? "IOC INSPECTOR" : "DETONATION CHAIN"}
+              </div>
+              <button
+                onClick={() => setDrawer(null)}
+                style={{ ...btnStyle("#1a1a30"), padding: "6px 12px", fontSize: 10, boxShadow: "none", border: "1px solid #2a2a50" }}
+              >
+                CLOSE
+              </button>
+            </div>
+            {drawer === "ioc" ? <IOCInspector ioc={ioc} enrichment={enrichment} /> : <DetonationChain artifacts={artifacts} />}
+          </div>
+        </>
+      )}
     </div>
   );
 }
