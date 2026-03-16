@@ -10,19 +10,57 @@ export function EmailAnalyzer({ onTrigger }) {
   const [body, setBody] = useState("");
   const [res, setRes] = useState(null);
   const inp = { width: "100%", background: dark ? "#0a0a18" : "#f5f6fc", border: `1px solid ${dark ? "#1a1a38" : "#dde0f0"}`, borderRadius: 7, padding: "13px 17px", fontFamily: MONO, fontSize: 16, color: dark ? "#c8d0e0" : "#1a1a38", outline: "none", boxSizing: "border-box" };
+  const parseRawEmail = (raw) => {
+    const lines = String(raw || "").split(/\r?\n/);
+    let i = 0;
+    const headers = {};
+    for (; i < lines.length; i++) {
+      const line = lines[i];
+      if (!line.trim()) { i++; break; }
+      const m = line.match(/^([A-Za-z-]+):\s*(.*)$/);
+      if (m) headers[m[1].toLowerCase()] = m[2];
+    }
+    if (!headers.from && !headers.subject) return null;
+    return {
+      from: headers.from || "",
+      subject: headers.subject || "",
+      body: lines.slice(i).join("\n").trim()
+    };
+  };
   const scan = () => {
     if (!from.trim() && !subject.trim() && !body.trim()) return;
-    const r = analyzeEmail({ from, subject, body }, CUSTOM_DOMAINS, CUSTOM_KW);
-    setRes(r);
-    onTrigger?.({
-      type: "email",
-      risk: r.risk,
-      score: r.score,
-      summary: r.senderFlags?.[0] || subject || "Email threat analysis",
-      detail: r,
-      domain: r.scannedLinks?.[0]?.domain
-    });
-    playSound(r.risk);
+    try {
+      const r = analyzeEmail({ from, subject, body }, CUSTOM_DOMAINS, CUSTOM_KW);
+      setRes(r);
+      onTrigger?.({
+        type: "email",
+        risk: r.risk,
+        score: r.score,
+        summary: r.senderFlags?.[0] || subject || "Email threat analysis",
+        detail: r,
+        domain: r.scannedLinks?.[0]?.domain
+      });
+      playSound(r.risk);
+    } catch {
+      setRes({
+        score: 100,
+        risk: "DANGER",
+        keywords: [],
+        urgency: [],
+        linkCount: 0,
+        hasAttach: false,
+        scannedLinks: [],
+        senderFlags: ["Analysis failed — check email format"],
+        hiddenRedirects: 0,
+        deobEscalations: 0,
+        intelligence: {
+          tactic: "Analysis Failure",
+          intent: "Unknown",
+          recommendation: "Verify sender and links manually.",
+          technicalDetail: "Parsing error while processing the email content."
+        }
+      });
+    }
   };
   return (
     <div>
@@ -31,7 +69,23 @@ export function EmailAnalyzer({ onTrigger }) {
         <input style={{ ...inp, fontSize: 13 }} placeholder="From: Google Play <noreply@google.com>" value={from} onChange={e => { setFrom(e.target.value); setRes(null); }} />
         <input style={{ ...inp, fontSize: 13 }} placeholder="Subject: Your Google Play order receipt" value={subject} onChange={e => { setSubject(e.target.value); setRes(null); }} />
       </div>
-      <textarea style={{ ...inp, minHeight: 160, resize: "vertical", lineHeight: 1.7 }} placeholder={"Paste email body here...\n\nExample: Thanks for your purchase. View your receipt at https://play.google.com/..." } value={body} onChange={e => { setBody(e.target.value); setRes(null); }} />
+      <textarea
+        style={{ ...inp, minHeight: 160, resize: "vertical", lineHeight: 1.7 }}
+        placeholder={"Paste email body here...\n\nTip: If you paste a full email (with From/Subject headers), fields will auto-fill."}
+        value={body}
+        onChange={e => { setBody(e.target.value); setRes(null); }}
+        onPaste={e => {
+          const text = e.clipboardData.getData("text");
+          const parsed = parseRawEmail(text);
+          if (parsed) {
+            e.preventDefault();
+            setFrom(parsed.from);
+            setSubject(parsed.subject);
+            setBody(parsed.body);
+            setRes(null);
+          }
+        }}
+      />
       <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: 10, marginTop: 10, alignItems: isMobile ? "stretch" : "center" }}>
         <button style={{ ...btnStyle("#ff9900"), width: isMobile ? "100%" : "auto" }} onClick={scan}>ANALYZE EMAIL</button>
         {res && (

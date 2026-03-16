@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { Card, Label, btnStyle, InfoBox, Tag } from "../shared/UI";
 import { useAnalyst } from "../../contexts/AnalystContext";
 
@@ -9,6 +9,7 @@ export function CLIIntegration() {
   const { history, pinned, togglePin } = useAnalyst();
   const latest = history[0];
   const pinnedState = pinned.includes("cli-log");
+  const [copied, setCopied] = useState(false);
 
   const logLine = latest ? formatLogLine(latest) : "No scans yet";
   const exportPayload = useMemo(() => JSON.stringify({ history: history.slice(0, 5) }, null, 2), [history]);
@@ -17,6 +18,8 @@ export function CLIIntegration() {
   const copyLog = async () => {
     if (navigator.clipboard) {
       await navigator.clipboard.writeText(logLine);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1400);
     }
   };
 
@@ -61,7 +64,9 @@ export function CLIIntegration() {
       </div>
 
       <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
-        <button style={btnStyle("#00ff88")} onClick={copyLog}>Copy CLI log</button>
+        <button style={btnStyle(copied ? "#22aaff" : "#00ff88")} onClick={copyLog}>
+          {copied ? "Copied" : "Copy CLI log"}
+        </button>
         <button style={btnStyle("#6644ff")} onClick={downloadJson}>Download JSON export</button>
       </div>
 

@@ -18,6 +18,7 @@ export function AnalystDashboard() {
   const lastScan = history[0];
   const lastScanTime = lastScan ? new Date(lastScan.timestamp).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }) : "never";
   const lastScanContext = lastScan ? `${lastScan.type?.toUpperCase() ?? "SCAN"} · ${lastScan.domain || lastScan.summary || "details"}` : "Awaiting first scan";
+  const safeContext = lastScanContext.length > 46 ? `${lastScanContext.slice(0, 46)}…` : lastScanContext;
   const dangerRatio = totalScans ? Math.round((dangerCount / totalScans) * 100) : 0;
 
   return (
@@ -44,7 +45,7 @@ export function AnalystDashboard() {
 
       <InfoBox color="#22aaff" style={{ marginTop: 12 }}>
         <div>Session history, pinned widgets, and recommendations persist in localStorage for this Kali workstation.</div>
-        <div style={{ marginTop: 4, fontSize: 11, color: "#88c8ff" }}>Last sync: {lastScanTime} · {lastScanContext}</div>
+        <div style={{ marginTop: 4, fontSize: 11, color: "#88c8ff" }}>Last sync: {lastScanTime} · {safeContext}</div>
         <div style={{ marginTop: 4, fontSize: 11, color: "#88c8ff" }}>{dangerRatio}% of this session's scans were danger-flagged.</div>
       </InfoBox>
 
@@ -72,12 +73,16 @@ export function AnalystDashboard() {
           <Tag color="#ffcc00">{dangerRatio}% danger ratio</Tag>
         </div>
         {recentEntries.length === 0 && <div style={{ fontSize: 11, color: "#667" }}>History syncs after your first scan.</div>}
-        {recentEntries.map(item => (
-          <div key={item.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 10px", borderRadius: 6, background: "#0a0a12", border: "1px solid rgba(255,255,255,0.05)", marginBottom: 6 }}>
-            <div style={{ fontSize: 12, color: "#dde" }}>{item.type.toUpperCase()} · {item.summary || item.domain || "details"}</div>
-            <Tag color={item.risk === "SAFE" ? "#00ff88" : item.risk === "DANGER" ? "#ff3355" : "#ffcc00"}>{item.risk}</Tag>
-          </div>
-        ))}
+        {recentEntries.map(item => {
+          const line = `${item.type.toUpperCase()} · ${item.summary || item.domain || "details"}`;
+          const safeLine = line.length > 60 ? `${line.slice(0, 60)}…` : line;
+          return (
+            <div key={item.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "8px 10px", borderRadius: 6, background: "#0a0a12", border: "1px solid rgba(255,255,255,0.05)", marginBottom: 6 }}>
+              <div style={{ fontSize: 12, color: "#dde", minWidth: 0, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{safeLine}</div>
+              <Tag color={item.risk === "SAFE" ? "#00ff88" : item.risk === "DANGER" ? "#ff3355" : "#ffcc00"}>{item.risk}</Tag>
+            </div>
+          );
+        })}
         <InfoBox color="#6644ff" style={{ marginTop: 10 }}>
           Session history lives in your browser storage; it stays after reloads while running on this workstation.
         </InfoBox>
