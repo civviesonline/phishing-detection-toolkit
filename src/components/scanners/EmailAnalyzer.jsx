@@ -20,11 +20,38 @@ export function EmailAnalyzer({ onTrigger }) {
       const m = line.match(/^([A-Za-z-]+):\s*(.*)$/);
       if (m) headers[m[1].toLowerCase()] = m[2];
     }
-    if (!headers.from && !headers.subject) return null;
+    if (headers.from || headers.subject) {
+      return {
+        from: headers.from || "",
+        subject: headers.subject || "",
+        body: lines.slice(i).join("\n").trim()
+      };
+    }
+    // Heuristic extraction for copied Gmail/Outlook UI text
+    const clean = lines.map(l => l.trim()).filter(Boolean);
+    const emailMatch = raw.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+    const heurFrom = emailMatch ? emailMatch[0] : "";
+    const ignorePhrases = ["conversation opened", "skip to content", "using gmail", "inbox", "to me", "unsubscribe", "reply", "forward"];
+    let heurSubject = "";
+    let subjectIdx = -1;
+    for (let idx = 0; idx < clean.length; idx++) {
+      const line = clean[idx];
+      const low = line.toLowerCase();
+      if (ignorePhrases.some(p => low.includes(p))) continue;
+      if (line.includes("@")) continue;
+      if (/\b(am|pm)\b/i.test(line) && /\d{1,2}:\d{2}/.test(line)) continue;
+      if (line.length > 140) continue;
+      heurSubject = line;
+      subjectIdx = idx;
+      break;
+    }
+    const bodyStart = subjectIdx >= 0 ? subjectIdx + 1 : 0;
+    const heurBody = clean.slice(bodyStart).join("\n").trim() || String(raw || "").trim();
+    if (!heurFrom && !heurSubject) return null;
     return {
-      from: headers.from || "",
-      subject: headers.subject || "",
-      body: lines.slice(i).join("\n").trim()
+      from: heurFrom,
+      subject: heurSubject,
+      body: heurBody
     };
   };
   const scan = () => {
@@ -108,7 +135,9 @@ export function EmailAnalyzer({ onTrigger }) {
           </button>
         )}
       </div>
-      {res && <div style={{ animation: "fadeIn .3s ease" }}>
+      {res && (
+        <EmailRenderBoundary>
+          <div style={{ animation: "fadeIn .3s ease" }}>
         <Card border={RISK_CFG[res.risk]?.color + "55"} style={{ marginTop: 16 }}>
           <TrafficLight risk={res.risk} />
           <ScoreBar score={res.score ?? 0} risk={res.risk} />
@@ -149,10 +178,37 @@ export function EmailAnalyzer({ onTrigger }) {
           })}
           </div>}
         </Card>
-        {body && <Card style={{ marginTop: 12 }}><Label>Annotated Content</Label><AnnotatedText text={body} result={res} /></Card>}
-      </div>}
+        {body && body.length <= 8000 && <Card style={{ marginTop: 12 }}><Label>Annotated Content</Label><AnnotatedText text={body} result={res} /></Card>}
+        {body && body.length > 8000 && (
+          <InfoBox color="#22aaff" style={{ marginTop: 12 }}>
+            Email is large; annotation is skipped to avoid performance issues. Use the summary and link analysis above.
+          </InfoBox>
+        )}
+          </div>
+        </EmailRenderBoundary>
+      )}
     </div>
   );
+}
+
+class EmailRenderBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <InfoBox color="#ff3355" style={{ marginTop: 12 }}>
+          Email analysis failed to render. Try clearing the form and analyzing again.
+        </InfoBox>
+      );
+    }
+    return this.props.children;
+  }
 }
 
 function MiniSitePreview({ url, risk = "SAFE" }) {
