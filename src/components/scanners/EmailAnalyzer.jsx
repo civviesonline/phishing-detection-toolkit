@@ -31,6 +31,7 @@ export function EmailAnalyzer({ onTrigger }) {
     if (!from.trim() && !subject.trim() && !body.trim()) return;
     try {
       const r = analyzeEmail({ from, subject, body }, CUSTOM_DOMAINS, CUSTOM_KW);
+      if (!r || !r.risk) throw new Error("Analysis returned empty result");
       setRes(r);
       onTrigger?.({
         type: "email",
@@ -108,19 +109,19 @@ export function EmailAnalyzer({ onTrigger }) {
         )}
       </div>
       {res && <div style={{ animation: "fadeIn .3s ease" }}>
-        <Card border={RISK_CFG[res.risk].color + "55"} style={{ marginTop: 16 }}>
+        <Card border={RISK_CFG[res.risk]?.color + "55"} style={{ marginTop: 16 }}>
           <TrafficLight risk={res.risk} />
-          <ScoreBar score={res.score} risk={res.risk} />
+          <ScoreBar score={res.score ?? 0} risk={res.risk} />
           <ThreatIntelligencePanel intelligence={res.intelligence} risk={res.risk} />
           <div style={{ display: "flex", gap: 12, marginTop: 18, flexWrap: "wrap" }}>
-            {[["Keywords", res.keywords.length, "#ff3355"], ["Urgency", res.urgency.length, "#ffcc00"], ["Links", res.linkCount, "#6699ff"], ["Hidden Redirects", res.hiddenRedirects || 0, "#22aaff"], ["Escalated Links", res.deobEscalations || 0, "#9977ff"], ["Attachment", res.hasAttach ? "YES" : "NO", res.hasAttach ? "#ff3355" : "#00ff88"]].map(([l, v, c], i) => (
+            {[["Keywords", res.keywords?.length ?? 0, "#ff3355"], ["Urgency", res.urgency?.length ?? 0, "#ffcc00"], ["Links", res.linkCount ?? 0, "#6699ff"], ["Hidden Redirects", res.hiddenRedirects || 0, "#22aaff"], ["Escalated Links", res.deobEscalations || 0, "#9977ff"], ["Attachment", res.hasAttach ? "YES" : "NO", res.hasAttach ? "#ff3355" : "#00ff88"]].map(([l, v, c], i) => (
               <div key={i} style={{ background: dark ? "#0d0d1e" : "#f8f9ff", border: "1px solid #1a1a30", borderRadius: 8, padding: "12px 16px", flex: "1 1 90px" }}>
                 <div style={{ fontFamily: SYNE, fontSize: 26, fontWeight: 900, color: c }}>{v}</div>
                 <div style={{ fontSize: 10, color: "#445", letterSpacing: 2, marginTop: 3 }}>{l}</div>
               </div>
             ))}
           </div>
-          {res.keywords.length > 0 && <div style={{ marginTop: 14 }}><Label>Flagged Terms</Label><div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>{res.keywords.map((k, i) => <Tag key={"k" + i} color="#ff3355">{k}</Tag>)}{res.urgency.map((k, i) => <Tag key={"u" + i} color="#ffcc00">{k}</Tag>)}</div></div>}
+          {res.keywords?.length > 0 && <div style={{ marginTop: 14 }}><Label>Flagged Terms</Label><div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>{res.keywords.map((k, i) => <Tag key={"k" + i} color="#ff3355">{k}</Tag>)}{(res.urgency || []).map((k, i) => <Tag key={"u" + i} color="#ffcc00">{k}</Tag>)}</div></div>}
           {res.senderFlags?.length > 0 && <div style={{ marginTop: 14 }}><Label>Sender Analysis</Label>{res.senderFlags.map((f, i) => <Flag key={i} f={f} />)}</div>}
           {res.scannedLinks?.length > 0 && <div style={{ marginTop: 14 }}><Label>URLs in Email ({res.scannedLinks.length})</Label>{res.scannedLinks.map((l, i) => {
             const c = RISK_CFG[l.risk] || RISK_CFG.SAFE;
