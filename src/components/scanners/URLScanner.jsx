@@ -6,6 +6,7 @@ import { analyzeURL, fakeGeo, fakeDNS, hashStr, playSound } from "../../utils/an
 import { submitIOC, getDetonationArtifacts, getEnrichment } from "../../utils/api";
 import { IOCInspector } from "../insights/IOCInspector";
 import { DetonationChain } from "../insights/DetonationChain";
+import { Icon } from "../shared/Icon";
 
 const SAMPLE_GROUPS = [
   { title: "Requested Domains", urls: [
@@ -203,11 +204,38 @@ function DNSGeoPanel({ domain }) {
   const geo = fakeGeo(domain), dns = fakeDNS(domain);
   useEffect(() => { setReady(true); }, [domain]);
   if (!ready) return <Card style={{ marginTop: 16 }}><div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0" }}><Spinner color="#6644ff" size={16} /><span style={{ fontSize: 13, color: "#445", letterSpacing: 3 }}>RESOLVING DNS & GEOIP...</span></div></Card>;
-  const geoRows = [["🌐", "IP", geo.ip], ["📍", "Country", `${geo.flag} ${geo.country}`], ["🏙", "City", geo.city], ["🖧", "ISP", geo.isp], ["🔢", "ASN", geo.asn], ["📋", "Registrar", geo.registrar], ["📅", "Age", `${geo.age}yr${geo.age !== 1 ? "s" : ""}${geo.newDomain ? " ⚠" : ""}`, geo.newDomain], ["🗓", "Created", geo.created]];
+  const geoRows = [
+    { icon: "globe", label: "IP", value: geo.ip },
+    { icon: "map-pin", label: "Country", value: `${geo.flag} ${geo.country}` },
+    { icon: "building", label: "City", value: geo.city },
+    { icon: "server", label: "ISP", value: geo.isp },
+    { icon: "hash", label: "ASN", value: geo.asn },
+    { icon: "clipboard", label: "Registrar", value: geo.registrar },
+    { icon: "calendar", label: "Age", value: `${geo.age}yr${geo.age !== 1 ? "s" : ""}`, warn: geo.newDomain },
+    { icon: "clock", label: "Created", value: geo.created }
+  ];
   return (
     <Card style={{ marginTop: 16 }}>
       <div style={{ display: "flex", marginBottom: 18, borderBottom: "1px solid #1a1a30" }}>{["geo", "dns"].map(t => <button key={t} onClick={() => setTab(t)} style={{ padding: "7px 20px", background: "none", border: "none", borderBottom: `2px solid ${tab === t ? "#6644ff" : "transparent"}`, color: tab === t ? "#9977ff" : "#445", fontFamily: SYNE, fontWeight: 700, fontSize: 11, letterSpacing: 3, cursor: "pointer", textTransform: "uppercase" }}>{t === "geo" ? "GeoIP" : "DNS"}</button>)}</div>
-      {tab === "geo" && <><div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>{geoRows.map(([icon, lbl, val, warn], i) => <div key={i} style={{ background: dark ? "#0d0d1e" : "#f8f9ff", border: `1px solid ${warn ? "#ffcc0033" : "#1a1a30"}`, borderRadius: 8, padding: "10px 14px" }}><div style={{ fontSize: 10, color: "#445", letterSpacing: 2, marginBottom: 4 }}>{icon} {lbl}</div><div style={{ fontFamily: MONO, fontSize: 12, color: warn ? "#ffcc00" : "#8899cc" }}>{val}</div></div>)}</div>{geo.newDomain && <Flag f="Domain <2 years old — commonly used in phishing campaigns" color="#ffcc00" />}</>}
+      {tab === "geo" && (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            {geoRows.map(({ icon, label, value, warn }, i) => (
+              <div key={i} style={{ background: dark ? "#0d0d1e" : "#f8f9ff", border: `1px solid ${warn ? "#ffcc0033" : "#1a1a30"}`, borderRadius: 8, padding: "10px 14px" }}>
+                <div style={{ fontSize: 10, color: "#445", letterSpacing: 2, marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}>
+                  <Icon name={icon} size={13} color="#6677aa" />
+                  {label}
+                </div>
+                <div style={{ fontFamily: MONO, fontSize: 12, color: warn ? "#ffcc00" : "#8899cc" }}>
+                  {value}
+                  {warn && <span style={{ marginLeft: 8, display: "inline-flex", alignItems: "center", gap: 4 }}><Icon name="triangle-alert" size={12} color="#ffcc00" />NEW</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+          {geo.newDomain && <Flag f="Domain <2 years old — commonly used in phishing campaigns" color="#ffcc00" />}
+        </>
+      )}
       {tab === "dns" && <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: MONO, fontSize: 11 }}><thead><tr style={{ borderBottom: "1px solid #1a1a30" }}>{["Type", "Value", "TTL"].map(h => <th key={h} style={{ padding: "6px 10px", textAlign: "left", color: "#445", fontSize: 9, letterSpacing: 2, fontWeight: 400 }}>{h}</th>)}</tr></thead><tbody>{dns.map((r, i) => <tr key={i} style={{ borderBottom: "1px solid #0f0f1e" }}><td style={{ padding: "7px 10px" }}><Tag color={r.type === "A" ? "#6699ff" : r.type === "MX" ? "#ff9900" : r.type === "NS" ? "#00ff88" : "#aa88ff"}>{r.type}</Tag></td><td style={{ padding: "7px 10px", color: "#7788aa", wordBreak: "break-all" }}>{r.value}</td><td style={{ padding: "7px 10px", color: "#445" }}>{r.ttl}s</td></tr>)}</tbody></table>}
     </Card>
   );
@@ -226,7 +254,7 @@ function BreachPanel({ domain }) {
       <div style={{ background: dark ? "#0d0d1e" : "#f8f9ff", border: "1px solid #1a1a30", borderRadius: 8, padding: 16 }}>
         <div style={{ fontSize: 11, color: "#556", marginBottom: 10, letterSpacing: 1 }}>CHECK EMAIL IN BREACH DATABASES</div>
         <div className="pg-row" style={{ display: "flex", gap: 8 }}><input style={{ flex: 1, minWidth: 0, boxSizing: "border-box", background: dark ? "#080814" : "#fff", border: "1px solid #1e2240", borderRadius: 6, padding: "9px 12px", fontFamily: MONO, fontSize: 12, color: dark ? "#c8d0e0" : "#1a1a38", outline: "none" }} placeholder="analyst@company.com" value={input} onChange={e => { setInput(e.target.value); setResult(null); }} onKeyDown={e => e.key === "Enter" && check()} /><button onClick={check} style={btnStyle()}>CHECK</button></div>
-        {result && <div style={{ marginTop: 12, animation: "fadeIn .3s ease" }}><InfoBox color={result.pwned ? "#ff3355" : "#00ff88"}>{result.pwned ? `🔴 PWNED — Found in ${result.hits.length} breach${result.hits.length > 1 ? "es" : ""}` : "✅ No breaches found"}</InfoBox>{result.pwned && result.hits.map((b, i) => <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 12px", background: dark ? "#080814" : "#fff", borderRadius: 5, marginTop: 6, border: "1px solid #1a1a30" }}><span style={{ fontFamily: MONO, fontSize: 12, color: "#8899bb" }}>{b.domain}</span><div style={{ display: "flex", gap: 8 }}><span style={{ fontSize: 10, color: "#445" }}>{b.n} records</span><Tag color="#ffcc00">{b.y}</Tag></div></div>)}</div>}
+        {result && <div style={{ marginTop: 12, animation: "fadeIn .3s ease" }}><InfoBox color={result.pwned ? "#ff3355" : "#00ff88"}>{result.pwned ? <><Icon name="x-circle" size={16} color="#ff3355" />PWNED — Found in {result.hits.length} breach{result.hits.length > 1 ? "es" : ""}</> : <><Icon name="check-circle" size={16} color="#00ff88" />No breaches found</>}</InfoBox>{result.pwned && result.hits.map((b, i) => <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 12px", background: dark ? "#080814" : "#fff", borderRadius: 5, marginTop: 6, border: "1px solid #1a1a30" }}><span style={{ fontFamily: MONO, fontSize: 12, color: "#8899bb" }}>{b.domain}</span><div style={{ display: "flex", gap: 8 }}><span style={{ fontSize: 10, color: "#445" }}>{b.n} records</span><Tag color="#ffcc00">{b.y}</Tag></div></div>)}</div>}
       </div>
     </Card>
   );

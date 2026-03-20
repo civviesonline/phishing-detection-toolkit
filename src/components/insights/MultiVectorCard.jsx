@@ -1,12 +1,13 @@
 import React from "react";
 import { Card, Label, Tag, btnStyle } from "../shared/UI";
 import { useAnalyst } from "../../contexts/AnalystContext";
+import { Icon } from "../shared/Icon";
 
 const TYPE_META = {
-  url: { label: "URL Scanner", icon: "🔍" },
-  email: { label: "Email Analyzer", icon: "✉️" },
-  attachment: { label: "Attachment Scorer", icon: "📎" },
-  qr: { label: "QR Scanner", icon: "📱" }
+  url: { label: "URL Scanner", icon: "search" },
+  email: { label: "Email Analyzer", icon: "mail" },
+  attachment: { label: "Attachment Scorer", icon: "paperclip" },
+  qr: { label: "QR Scanner", icon: "smartphone" }
 };
 
 const RISK_ORDER = { SAFE: 0, SUSPICIOUS: 1, DANGER: 2 };
@@ -77,8 +78,9 @@ export function MultiVectorCard() {
             <span style={{ width: 16, height: 16, borderRadius: "50%", border: `2px solid ${aggregatedColor}`, marginTop: 6 }} aria-hidden />
             <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: "#dde" }}>
-                  {TYPE_META[entry.type]?.icon} {TYPE_META[entry.type]?.label}
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#dde", display: "flex", alignItems: "center", gap: 7 }}>
+                  <Icon name={TYPE_META[entry.type]?.icon} size={14} color="#dde" />
+                  {TYPE_META[entry.type]?.label}
                 </div>
                 <Tag color={entry.risk === "SAFE" ? "#00ff88" : entry.risk === "DANGER" ? "#ff3355" : "#ffcc00"}>{entry.risk}</Tag>
               </div>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, createContext, useContext } from "react";
 import { SYNE, MONO, RISK_CFG } from "../../data/constants";
+import { Icon } from "./Icon";
 
 export const ThemeCtx = createContext({ dark: true, isMobile: false });
 export const useTheme = () => useContext(ThemeCtx);
@@ -27,7 +28,9 @@ export function TrafficLight({ risk }) {
   const c = RISK_CFG[risk] || RISK_CFG.SAFE;
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-      <div style={{ width: 58, height: 58, borderRadius: "50%", background: c.color, boxShadow: `0 0 28px ${c.color},0 0 56px ${c.glow}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, color: "#000", fontWeight: 900, animation: "pulse 1.4s ease-in-out infinite" }}>{c.icon}</div>
+      <div style={{ width: 58, height: 58, borderRadius: "50%", background: c.color, boxShadow: `0 0 28px ${c.color},0 0 56px ${c.glow}`, display: "flex", alignItems: "center", justifyContent: "center", color: "#000", animation: "pulse 1.4s ease-in-out infinite" }}>
+        <Icon name={c.icon} size={28} color="#000" />
+      </div>
       <span style={{ fontFamily: SYNE, fontWeight: 900, fontSize: 27, color: c.color, letterSpacing: 4 }}>{c.label}</span>
     </div>
   );
@@ -85,9 +88,18 @@ export function AlertOverlay({ level, onDismiss }) {
       <div style={{ position: "absolute", inset: 0, border: `${D ? 5 : 3}px solid ${bc}`, animation: `borderFlash ${D ? ".18s" : ".4s"} ease-in-out infinite` }} />
       {D && [0, 1, 2, 3].map(i => <div key={i} style={{ position: "absolute", [i % 2 ? "right" : "left"]: 0, top: 0, width: 3, height: "100%", background: "linear-gradient(180deg,transparent,#ff1133,transparent)", animation: `scannerV ${.6 + i * .15}s linear infinite`, animationDelay: `${i * .18}s`, opacity: .7 }} />)}
       <div onClick={onDismiss} style={{ background: bg, backgroundSize: "300% 100%", animation: "shimmer .8s linear infinite", padding: "16px 32px", display: "flex", alignItems: "center", gap: 16, pointerEvents: "auto", cursor: "pointer", borderBottom: `2px solid ${D ? "#ff335588" : "#ffcc0088"}`, boxShadow: `0 4px 40px ${D ? "#ff113388" : "#ffaa0066"}` }}>
-        <div style={{ width: 36, height: 36, borderRadius: "50%", background: D ? "#fff" : "#1a1000", border: D ? "none" : "2px solid #ffcc00", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, animation: `pulse ${D ? ".3s" : ".5s"} ease-in-out infinite`, flexShrink: 0 }}>{D ? "🚨" : "⚠"}</div>
-        <div style={{ flex: 1 }}><div style={{ fontFamily: SYNE, fontWeight: 900, fontSize: D ? 20 : 17, color: "#fff", letterSpacing: D ? 5 : 3, textShadow: D ? "0 0 20px #fff8" : "none" }}>{D ? "🚨 PHISHING THREAT DETECTED" : "⚠ SUSPICIOUS ACTIVITY DETECTED"}</div><div style={{ fontFamily: MONO, fontSize: 12, color: "rgba(255,255,255,.8)", letterSpacing: 2, marginTop: 3 }}>{D ? "HIGH CONFIDENCE — DO NOT PROCEED" : "POTENTIAL INDICATORS — PROCEED WITH CAUTION"} · CLICK TO DISMISS</div></div>
-        <div style={{ width: 36, height: 36, borderRadius: "50%", border: "2px solid rgba(255,255,255,.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "rgba(255,255,255,.5)", fontFamily: MONO }}>✕</div>
+        <div style={{ width: 36, height: 36, borderRadius: "50%", background: D ? "#fff" : "#1a1000", border: D ? "none" : "2px solid #ffcc00", display: "flex", alignItems: "center", justifyContent: "center", animation: `pulse ${D ? ".3s" : ".5s"} ease-in-out infinite`, flexShrink: 0 }}>
+          <Icon name={D ? "x-circle" : "triangle-alert"} size={20} color={D ? "#ff1133" : "#ffcc00"} />
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontFamily: SYNE, fontWeight: 900, fontSize: D ? 20 : 17, color: "#fff", letterSpacing: D ? 5 : 3, textShadow: D ? "0 0 20px #fff8" : "none" }}>
+            {D ? "PHISHING THREAT DETECTED" : "SUSPICIOUS ACTIVITY DETECTED"}
+          </div>
+          <div style={{ fontFamily: MONO, fontSize: 12, color: "rgba(255,255,255,.8)", letterSpacing: 2, marginTop: 3 }}>{D ? "HIGH CONFIDENCE — DO NOT PROCEED" : "POTENTIAL INDICATORS — PROCEED WITH CAUTION"} · CLICK TO DISMISS</div>
+        </div>
+        <div style={{ width: 36, height: 36, borderRadius: "50%", border: "2px solid rgba(255,255,255,.3)", display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(255,255,255,.5)" }}>
+          <Icon name="x" size={14} color="rgba(255,255,255,.55)" />
+        </div>
       </div>
       {D && <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 6, background: "linear-gradient(90deg,#ff1133,#ff6600,#ff1133)", backgroundSize: "200% 100%", animation: "shimmer .5s linear infinite" }} />}
       {[{ top: 48, left: 0 }, { top: 48, right: 0 }, { bottom: 6, left: 0 }, { bottom: 6, right: 0 }].map((p, i) => <div key={i} style={{ position: "absolute", ...p, width: D ? 90 : 60, height: D ? 90 : 60, background: `radial-gradient(circle,${D ? "#ff1133" : "#ffaa00"} 0%,transparent 70%)`, animation: `pulse ${D?.2 + i * .04 : .4 + i * .06}s ease-in-out infinite`, animationDelay: `${i * .07}s` }} />)}
@@ -107,7 +119,12 @@ export function ResultCard({ result }) {
       <ScoreBar score={result.score} risk={result.risk} />
       <ConfidenceMeter confidence={result.confidence ?? Math.min(99, Math.round(30 + result.score * 0.65))} risk={result.risk} />
       {result.flags?.length > 0 && <div style={{ marginTop: 18 }}><Label>Threat Indicators ({result.flags.length})</Label>{result.flags.map((f, i) => <Flag key={i} f={f} />)}</div>}
-      {result.flags?.length === 0 && <InfoBox color="#00ff88">✓ No phishing indicators detected.</InfoBox>}
+      {result.flags?.length === 0 && (
+        <InfoBox color="#00ff88">
+          <Icon name="check-circle" size={16} color="#00ff88" />
+          No phishing indicators detected.
+        </InfoBox>
+      )}
     </Card>
   );
 }

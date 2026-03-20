@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Card, Label, Spinner, btnStyle } from "./UI";
+import { Icon } from "./Icon";
 
 const PREVIEW_SERVICES = [
   { label: "WordPress mShots", build: href => `https://s.wordpress.com/mshots/v1/${encodeURIComponent(href)}?w=1200` },
@@ -105,7 +106,10 @@ export function SitePreview({ url, risk = "SAFE", label = "Site Preview", hint }
         </button>
       </div>
       <div className="pg-row" style={{ marginTop: 10, fontSize: 11, color: "#8899bb", display: "flex", justifyContent: "space-between" }}>
-        <span style={{ color: glowColor.replace(/44$/, "ff") }}>🚀 {risk === "SAFE" ? "Verified" : "Caution"}</span>
+        <span style={{ color: glowColor.replace(/44$/, "ff"), display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <Icon name={risk === "SAFE" ? "check-circle" : "triangle-alert"} size={13} color={glowColor.replace(/44$/, "ff")} />
+          {risk === "SAFE" ? "Verified" : "Caution"}
+        </span>
         <a href={safeHref} target="_blank" rel="noreferrer" style={{ fontSize: 11, textDecoration: "underline", color: "#22aaff" }}>
           Open URL
         </a>

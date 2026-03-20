@@ -3,6 +3,7 @@ import { useTheme, Card, Label, Spinner, ResultCard, btnStyle, InfoBox } from ".
 import { SitePreview } from "../shared/SitePreview";
 import { MONO, SYNE, CUSTOM_DOMAINS, CUSTOM_KW, RISK_CFG } from "../../data/constants";
 import { analyzeURL, playSound } from "../../utils/analysis";
+import { Icon } from "../shared/Icon";
 
 
 const QR_STEPS = [
@@ -177,7 +178,7 @@ export function QRScanner({ onTrigger }) {
 
           {!cameraOn && !preview && (
             <div style={{ color: "#445", padding: "60px 0", textAlign: "center" }}>
-              <div style={{ fontSize: 48, marginBottom: 10 }}>📷</div>
+              <div style={{ marginBottom: 10, display: "flex", justifyContent: "center" }}><Icon name="camera" size={48} color="#6677aa" /></div>
               <div style={{ fontSize: 13, letterSpacing: 2, fontWeight: 800 }}>CAMERA STANDBY</div>
               <div style={{ fontSize: 10, marginTop: 8 }}>Drag/drop an image to scan instantly</div>
             </div>
@@ -229,7 +230,10 @@ export function QRScanner({ onTrigger }) {
 
             {status && (
               <div style={{ padding: "12px", background: "#ffcc0015", border: "1px solid #ffcc0033", borderRadius: 6, fontSize: 12, color: "#ffcc00", animation: "fadeIn .3s ease" }}>
-                ℹ️ {status}
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                  <Icon name="info" size={14} color="#ffcc00" />
+                  {status}
+                </span>
               </div>
             )}
 
@@ -253,11 +257,12 @@ export function QRScanner({ onTrigger }) {
                   <div style={{ fontFamily: MONO, fontSize: 13, color: res.risk === "SAFE" ? "#00ff88" : "#ff8899", wordBreak: "break-all", marginBottom: 12 }}>{res.raw}</div>
                   {res.risk === "SAFE" ? (
                     <a href={res.raw.startsWith("http") ? res.raw : "https://" + res.raw} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, background: "#00ff88", color: "#000", padding: "12px", borderRadius: 6, textDecoration: "none", fontFamily: SYNE, fontWeight: 900, fontSize: 13, letterSpacing: 1, boxShadow: "0 0 20px rgba(0,255,136,0.3)" }}>
-                      🚀 OPEN SECURE URL
+                      <Icon name="rocket" size={15} color="#000" />OPEN SECURE URL
                     </a>
                   ) : (
-                    <div style={{ padding: "10px", background: "#ff335515", borderRadius: 6, color: "#ff3355", fontSize: 11, textAlign: "center", fontWeight: 700, letterSpacing: 1 }}>
-                      ⚠️ DIRECT LINK DISABLED — THREAT DETECTED
+                    <div style={{ padding: "10px", background: "#ff335515", borderRadius: 6, color: "#ff3355", fontSize: 11, textAlign: "center", fontWeight: 700, letterSpacing: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                      <Icon name="triangle-alert" size={14} color="#ff3355" />
+                      DIRECT LINK DISABLED — THREAT DETECTED
                     </div>
                   )}
                 </div>

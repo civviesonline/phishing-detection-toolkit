@@ -1,6 +1,7 @@
 import React from "react";
 import { Card, Label, Tag, InfoBox, btnStyle } from "../shared/UI";
 import { useAnalyst } from "../../contexts/AnalystContext";
+import { Icon } from "../shared/Icon";
 
 const WIDGETS = [
   { id: "attack-feed", label: "Live Attack Feed" },
@@ -58,9 +59,10 @@ export function AnalystDashboard() {
               <button
                 key={widget.id}
                 onClick={() => togglePin(widget.id)}
-                style={{ ...btnStyle(active ? "#6644ff" : "#1a1a30"), padding: "6px 16px", fontSize: 11 }}
+                style={{ ...btnStyle(active ? "#6644ff" : "#1a1a30"), padding: "6px 16px", fontSize: 11, display: "inline-flex", alignItems: "center", gap: 6 }}
               >
-                {active ? "★" : "☆"} {widget.label}
+                <Icon name={active ? "star" : "star-outline"} size={12} color={active ? "#fff" : "#b3b8cc"} />
+                {widget.label}
               </button>
             );
           })}

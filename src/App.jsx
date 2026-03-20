@@ -1,6 +1,7 @@
 import React, { useCallback, useState, useEffect, useMemo } from "react";
 import { FONTS, MONO, SYNE } from "./data/constants";
 import { ThemeCtx, BrandMark, AlertOverlay } from "./components/shared/UI";
+import { Icon } from "./components/shared/Icon";
 import { URLScanner } from "./components/scanners/URLScanner";
 import { EmailAnalyzer } from "./components/scanners/EmailAnalyzer";
 import { QRScanner } from "./components/scanners/QRScanner";
@@ -71,32 +72,32 @@ const NAV = [
   {
     group: "Detection",
     items: [
-      { id: "url", icon: "🔍", label: "URL Scanner" },
-      { id: "email", icon: "✉️", label: "Email Analyzer" },
-      { id: "qr", icon: "📱", label: "QR Scanner" },
-      { id: "attach", icon: "📎", label: "Attachment Scorer" },
-      { id: "homo", icon: "🔤", label: "Homoglyph Detector" },
-      { id: "bulk", icon: "📦", label: "Bulk Scanner" }
+      { id: "url", icon: "search", label: "URL Scanner" },
+      { id: "email", icon: "mail", label: "Email Analyzer" },
+      { id: "qr", icon: "smartphone", label: "QR Scanner" },
+      { id: "attach", icon: "paperclip", label: "Attachment Scorer" },
+      { id: "homo", icon: "type", label: "Homoglyph Detector" },
+      { id: "bulk", icon: "package", label: "Bulk Scanner" }
     ]
   },
   {
     group: "Training",
     items: [
-      { id: "quiz", icon: "🎓", label: "Awareness Quiz" },
-      { id: "drills", icon: "🎯", label: "Scenario Drills" }
+      { id: "quiz", icon: "graduation-cap", label: "Awareness Quiz" },
+      { id: "drills", icon: "target", label: "Scenario Drills" }
     ]
   },
   {
     group: "Insights",
     items: [
-      { id: "insights", icon: "📡", label: "SOC Surface" },
-      { id: "intel", icon: "🧠", label: "Intel Lab" }
+      { id: "insights", icon: "radar", label: "SOC Surface" },
+      { id: "intel", icon: "brain", label: "Intel Lab" }
     ]
   },
   {
     group: "Admin",
     items: [
-      { id: "blocklist", icon: "🛡️", label: "Blocklist Manager" }
+      { id: "blocklist", icon: "shield", label: "Blocklist Manager" }
     ]
   }
 ];
@@ -276,7 +277,9 @@ function AppShell() {
                 <div style={styles.navGroup}>{group.group}</div>
                 {group.items.map(item => (
                   <div key={item.id} style={styles.navItem(tab === item.id)} onClick={() => setTab(item.id)}>
-                    <span style={{ fontSize: 20 }}>{item.icon}</span>
+                    <span style={{ display: "inline-flex", color: tab === item.id ? "#ff3355" : dark ? "#667" : "#889" }}>
+                      <Icon name={item.icon} size={19} />
+                    </span>
                     {item.label}
                   </div>
                 ))}
@@ -305,7 +308,8 @@ function AppShell() {
                 transition: "all .2s"
               }}
             >
-              {dark ? "🌙 SWITCH TO LIGHT" : "☀️ SWITCH TO DARK"}
+              <Icon name={dark ? "moon" : "sun"} size={16} />
+              {dark ? "SWITCH TO LIGHT" : "SWITCH TO DARK"}
             </button>
           </div>
         </div>
@@ -314,14 +318,14 @@ function AppShell() {
           {isMobile && (
             <div style={{ position: "fixed", top: 0, left: 0, right: 0, height: 62, padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", background: dark ? "#0a0a14" : "#ffffff", borderBottom: `1px solid ${dark ? "#1a1a38" : "#dde0f0"}`, zIndex: 110 }}>
               <button onClick={() => setSidebarOpen(v => !v)} style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.3)", borderRadius: 8, padding: "6px 12px", color: dark ? "#fff" : "#1a1a38", fontWeight: 700 }}>
-                ☰
+                <Icon name="menu" size={18} color={dark ? "#fff" : "#1a1a38"} />
               </button>
               <div style={{ textAlign: "center" }}>
                 <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1, color: dark ? "#fff" : "#1a1a38" }}>PHISHGUARD</div>
                 <div style={{ fontSize: 10, letterSpacing: 2, color: "#ff3355" }}>{currentGroup}</div>
               </div>
               <button onClick={() => setDark(v => !v)} style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.3)", borderRadius: 8, padding: "6px 12px", color: dark ? "#fff" : "#1a1a38", fontWeight: 700 }}>
-                {dark ? "☀️" : "🌙"}
+                <Icon name={dark ? "sun" : "moon"} size={18} color={dark ? "#fff" : "#1a1a38"} />
               </button>
             </div>
           )}
