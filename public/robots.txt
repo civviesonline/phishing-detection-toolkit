@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://phishguard-soc-toolkit.vercel.app/sitemap.xml

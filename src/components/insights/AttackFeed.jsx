@@ -39,7 +39,10 @@ const createBlipStyle = (index, color) => ({
   top: `${12 + (index * 17) % 66}%`,
   left: `${6 + (index * 23) % 74}%`,
   boxShadow: `0 0 14px ${color}`,
-  animation: `blipPulse ${1.6 + (index % 3) * 0.35}s ease-in-out infinite`,
+  animationName: "blipPulse",
+  animationDuration: `${1.6 + (index % 3) * 0.35}s`,
+  animationTimingFunction: "ease-in-out",
+  animationIterationCount: "infinite",
   animationDelay: `${index * 0.1}s`
 });
 

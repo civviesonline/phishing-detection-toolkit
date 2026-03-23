@@ -21,7 +21,9 @@ const tone = (a, type, freq, t, dur, vol, dist = 0) => {
 
 export const playSound = (level = "DANGER") => {
   if (!audioCtx) return;
-  if (audioCtx.state === 'suspended') audioCtx.resume();
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume().catch(() => {});
+  }
   const a = audioCtx, t = a.currentTime;
 
   if (level === "SAFE") {

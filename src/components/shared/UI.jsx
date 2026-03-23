@@ -80,14 +80,14 @@ export function BrandMark({ size = 40 }) {
 
 export function AlertOverlay({ level, onDismiss }) {
   const D = level === "DANGER";
-  useEffect(() => { if (level) { const t = setTimeout(onDismiss, D ? 5500 : 3500); return () => clearTimeout(t); } }, [level]);
+  useEffect(() => { if (level) { const t = setTimeout(onDismiss, D ? 5500 : 3500); return () => clearTimeout(t); } }, [D, level, onDismiss]);
   if (!level) return null;
   const bc = D ? "#ff1133" : "#ffcc00", bg = D ? "linear-gradient(90deg,#cc0022,#ff1133,#ff3355,#ff1133,#cc0022)" : "linear-gradient(90deg,#aa6600,#ffaa00,#ffcc00,#ffaa00,#aa6600)";
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 9999, pointerEvents: "none", display: "flex", flexDirection: "column" }}>
       <div style={{ position: "absolute", inset: 0, border: `${D ? 5 : 3}px solid ${bc}`, animation: `borderFlash ${D ? ".18s" : ".4s"} ease-in-out infinite` }} />
-      {D && [0, 1, 2, 3].map(i => <div key={i} style={{ position: "absolute", [i % 2 ? "right" : "left"]: 0, top: 0, width: 3, height: "100%", background: "linear-gradient(180deg,transparent,#ff1133,transparent)", animation: `scannerV ${.6 + i * .15}s linear infinite`, animationDelay: `${i * .18}s`, opacity: .7 }} />)}
-      <div onClick={onDismiss} style={{ background: bg, backgroundSize: "300% 100%", animation: "shimmer .8s linear infinite", padding: "16px 32px", display: "flex", alignItems: "center", gap: 16, pointerEvents: "auto", cursor: "pointer", borderBottom: `2px solid ${D ? "#ff335588" : "#ffcc0088"}`, boxShadow: `0 4px 40px ${D ? "#ff113388" : "#ffaa0066"}` }}>
+      {D && [0, 1, 2, 3].map(i => <div key={i} style={{ position: "absolute", [i % 2 ? "right" : "left"]: 0, top: 0, width: 3, height: "100%", background: "linear-gradient(180deg,transparent,#ff1133,transparent)", animationName: "scannerV", animationDuration: `${.6 + i * .15}s`, animationTimingFunction: "linear", animationIterationCount: "infinite", animationDelay: `${i * .18}s`, opacity: .7 }} />)}
+      <div onClick={onDismiss} style={{ backgroundImage: bg, backgroundColor: D ? "#ff1133" : "#ffcc00", backgroundSize: "300% 100%", animation: "shimmer .8s linear infinite", padding: "16px 32px", display: "flex", alignItems: "center", gap: 16, pointerEvents: "auto", cursor: "pointer", borderBottom: `2px solid ${D ? "#ff335588" : "#ffcc0088"}`, boxShadow: `0 4px 40px ${D ? "#ff113388" : "#ffaa0066"}` }}>
         <div style={{ width: 36, height: 36, borderRadius: "50%", background: D ? "#fff" : "#1a1000", border: D ? "none" : "2px solid #ffcc00", display: "flex", alignItems: "center", justifyContent: "center", animation: `pulse ${D ? ".3s" : ".5s"} ease-in-out infinite`, flexShrink: 0 }}>
           <Icon name={D ? "x-circle" : "triangle-alert"} size={20} color={D ? "#ff1133" : "#ffcc00"} />
         </div>
@@ -101,8 +101,8 @@ export function AlertOverlay({ level, onDismiss }) {
           <Icon name="x" size={14} color="rgba(255,255,255,.55)" />
         </div>
       </div>
-      {D && <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 6, background: "linear-gradient(90deg,#ff1133,#ff6600,#ff1133)", backgroundSize: "200% 100%", animation: "shimmer .5s linear infinite" }} />}
-      {[{ top: 48, left: 0 }, { top: 48, right: 0 }, { bottom: 6, left: 0 }, { bottom: 6, right: 0 }].map((p, i) => <div key={i} style={{ position: "absolute", ...p, width: D ? 90 : 60, height: D ? 90 : 60, background: `radial-gradient(circle,${D ? "#ff1133" : "#ffaa00"} 0%,transparent 70%)`, animation: `pulse ${D?.2 + i * .04 : .4 + i * .06}s ease-in-out infinite`, animationDelay: `${i * .07}s` }} />)}
+      {D && <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 6, backgroundImage: "linear-gradient(90deg,#ff1133,#ff6600,#ff1133)", backgroundColor: "#ff1133", backgroundSize: "200% 100%", animation: "shimmer .5s linear infinite" }} />}
+      {[{ top: 48, left: 0 }, { top: 48, right: 0 }, { bottom: 6, left: 0 }, { bottom: 6, right: 0 }].map((p, i) => <div key={i} style={{ position: "absolute", ...p, width: D ? 90 : 60, height: D ? 90 : 60, background: `radial-gradient(circle,${D ? "#ff1133" : "#ffaa00"} 0%,transparent 70%)`, animationName: "pulse", animationDuration: `${D ? .2 + i * .04 : .4 + i * .06}s`, animationTimingFunction: "ease-in-out", animationIterationCount: "infinite", animationDelay: `${i * .07}s` }} />)}
       {D && <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse at center,transparent 40%,rgba(255,17,51,.25) 100%)", animation: "bgFlash .35s ease-in-out infinite" }} />}
     </div>
   );

@@ -47,13 +47,14 @@ export function IntelWorkspace() {
         </div>
         <div className="pg-row" style={{ display: "flex", gap: 10 }}>
           <input
+            aria-label="URL to run through the intel lab"
             value={input}
             onChange={e => setInput(e.target.value)}
             placeholder="https://example.com/login"
             style={{ flex: 1, minWidth: 0, background: dark ? "#0a0a18" : "#f5f6fc", border: "1px solid #1a1a30", borderRadius: 7, padding: "12px 14px", color: dark ? "#c8d0e0" : "#1a1a38", fontFamily: "Share Tech Mono, monospace", fontSize: 13, outline: "none", boxSizing: "border-box" }}
             onKeyDown={e => e.key === "Enter" && run()}
           />
-          <button style={btnStyle("#22aaff")} onClick={run}>{loading ? "RUNNING..." : "RUN INTEL"}</button>
+          <button type="button" style={btnStyle("#22aaff")} onClick={run}>{loading ? "RUNNING..." : "RUN INTEL"}</button>
         </div>
         {loading && <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 10, color: "#667" }}><Spinner size={16} />Collecting intel…</div>}
       </Card>

@@ -3,17 +3,87 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="PhishGuard SOC Edition — a browser-based phishing analysis and training cockpit with URL, email, QR, and attachment scanning plus SOC insights." />
+    <meta name="application-name" content="Circadian by PhishGuard" />
+    <meta name="apple-mobile-web-app-title" content="Circadian" />
+    <meta
+      name="description"
+      content="Circadian by PhishGuard is a 24-hour phishing detection tool for scanning suspicious links, emails, QR codes, and attachments from one browser-based security workspace."
+    />
+    <meta
+      name="keywords"
+      content="phishing detection tool, detect phishing links, email scam checker, link safety checker, QR phishing scanner, attachment security scanner"
+    />
+    <meta name="robots" content="index,follow" />
     <meta name="google-site-verification" content="zPEWMkwiZ-oCsa4YmVsPh2waqomUpD3ehMebuhI4UDA" />
-    <meta property="og:title" content="PhishGuard SOC Edition" />
-    <meta property="og:description" content="PhishGuard is a browser-based phishing analysis and training cockpit for SOC teams." />
+    <link rel="canonical" href="https://phishguard-soc-toolkit.vercel.app/" />
+    <meta property="og:title" content="Circadian by PhishGuard - 24-Hour Phishing Detection Tool" />
+    <meta
+      property="og:description"
+      content="Detect phishing links, check suspicious emails, scan QR codes, and review risky attachments with Circadian by PhishGuard."
+    />
+    <meta property="og:site_name" content="Circadian by PhishGuard" />
     <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://phishguard-soc-toolkit.vercel.app/" />
+    <meta property="og:image" content="/phishguard-icon.svg" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Circadian by PhishGuard - 24-Hour Phishing Detection Tool" />
+    <meta
+      name="twitter:description"
+      content="Detect phishing links, check suspicious emails, scan QR codes, and review risky attachments with Circadian by PhishGuard."
+    />
     <meta name="theme-color" content="#05050a" />
     <link rel="icon" type="image/svg+xml" href="/phishguard-icon.svg" />
-    <title>PhishGuard SOC Edition</title>
+    <link rel="manifest" href="/site.webmanifest" />
+    <title>Circadian by PhishGuard - 24-Hour Phishing Detection Tool</title>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "Circadian by PhishGuard",
+        "url": "https://phishguard-soc-toolkit.vercel.app/",
+        "applicationCategory": "SecurityApplication",
+        "operatingSystem": "Web",
+        "description": "Circadian by PhishGuard is a browser-based 24-hour phishing detection tool for analyzing suspicious links, emails, QR codes, and attachments in real time."
+      }
+    </script>
   </head>
   <body>
-    <div id="root"></div>
+    <noscript>
+      <div style="font-family: Arial, sans-serif; max-width: 960px; margin: 0 auto; padding: 16px 20px 0; color: #f4c34d; background: #05050a;">
+        Circadian by PhishGuard works best with JavaScript enabled. You can still read the overview below, but the interactive scanners require JavaScript.
+      </div>
+    </noscript>
+    <div id="root">
+      <main style="font-family: Arial, sans-serif; max-width: 960px; margin: 0 auto; padding: 48px 20px; color: #d9deea; background: #05050a;">
+        <header>
+          <p style="margin: 0 0 12px; color: #ff5c7a; font-size: 12px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase;">
+            24-Hour Threat Analysis
+          </p>
+          <h1 style="margin: 0 0 16px; font-size: 2.6rem; line-height: 1.1;">
+            Circadian by PhishGuard is a 24-hour phishing detection tool for links, emails, QR codes, and attachments.
+          </h1>
+          <p style="margin: 0 0 28px; max-width: 760px; line-height: 1.7; color: #bcc6da;">
+            Use Circadian by PhishGuard as a phishing detection tool, link safety checker, and email scam checker to investigate suspicious activity directly in the browser. The app helps teams detect phishing links, review risky messages, and train users with guided awareness modules.
+          </p>
+        </header>
+
+        <section style="margin-bottom: 24px;">
+          <h2 style="margin: 0 0 12px; font-size: 1.4rem;">How it works</h2>
+          <ol style="margin: 0; padding-left: 20px; line-height: 1.8; color: #bcc6da;">
+            <li>Paste a suspicious link, email, QR code, or attachment indicator into the matching scanner.</li>
+            <li>Review the threat score, phishing indicators, and safety verdict returned by Circadian by PhishGuard.</li>
+            <li>Use the analyst insights and awareness tools to decide whether to block, report, or escalate.</li>
+          </ol>
+        </section>
+
+        <section>
+          <h2 style="margin: 0 0 12px; font-size: 1.4rem;">What Circadian checks</h2>
+          <p style="margin: 0; line-height: 1.7; color: #bcc6da;">
+            Circadian by PhishGuard helps detect phishing links, uncover spoofed sender behavior, inspect suspicious QR destinations, and surface risky attachment patterns so security teams can respond faster.
+          </p>
+        </section>
+      </main>
+    </div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

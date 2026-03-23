@@ -1,0 +1,17 @@
+{
+  "name": "Circadian by PhishGuard",
+  "short_name": "Circadian",
+  "description": "A 24-hour phishing detection workspace for suspicious links, emails, QR codes, and attachments.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#05050a",
+  "theme_color": "#05050a",
+  "icons": [
+    {
+      "src": "/phishguard-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

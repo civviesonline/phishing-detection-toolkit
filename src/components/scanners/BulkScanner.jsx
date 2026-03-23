@@ -45,7 +45,7 @@ export function BulkScanner({ onTrigger }) {
         {results.map((r, i) => {
           const c = RISK_CFG[r.risk] || RISK_CFG.SAFE;
           return (
-            <div key={i} style={{ background: "#0d0d1e", border: `1px solid ${c.color}33`, borderRadius: 8, padding: "12px 16px", animation: `fadeIn .2s ease forwards`, animationDelay: `${i * .05}s`, opacity: 0 }}>
+            <div key={i} style={{ background: "#0d0d1e", border: `1px solid ${c.color}33`, borderRadius: 8, padding: "12px 16px", animationName: "fadeIn", animationDuration: ".2s", animationTimingFunction: "ease", animationFillMode: "forwards", animationDelay: `${i * .05}s`, opacity: 0 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
                 <span style={{ fontFamily: MONO, fontSize: 12, color: "#8899bb", wordBreak: "break-all" }}>{r.url}</span>
                 <Tag color={c.color}>{r.risk}</Tag>

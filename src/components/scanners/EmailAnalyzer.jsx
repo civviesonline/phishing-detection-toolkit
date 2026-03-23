@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useTheme, Card, Label, TrafficLight, ScoreBar, Tag, Flag, InfoBox, Spinner, btnStyle, ThreatIntelligencePanel } from "../shared/UI";
 import { MONO, SYNE, RISK_CFG, CUSTOM_DOMAINS, CUSTOM_KW } from "../../data/constants";
 import { analyzeEmail, playSound } from "../../utils/analysis";
@@ -171,7 +171,7 @@ export function EmailAnalyzer({ onTrigger }) {
                   <Tag color="#22aaff">Final: {finalRisk}</Tag>
                   <Tag color={c.color}>Effective: {l.risk}</Tag>
                 </div>}
-                <MiniSitePreview url={l.url} />
+                <MiniSitePreview url={l.url} risk={l.risk} />
                 {l.flags?.length > 0 && <div style={{ marginTop: 6, paddingLeft: 18 }}>{l.flags.map((f, j) => <div key={j} style={{ fontSize: 11, color: "#cc8899", marginTop: 2 }}>▶ {f}</div>)}</div>}
               </div>
             );
@@ -214,17 +214,29 @@ class EmailRenderBoundary extends React.Component {
 function MiniSitePreview({ url, risk = "SAFE" }) {
   const [st, setSt] = useState("loading");
   const [srcIdx, setSrcIdx] = useState(0);
-  let safe;
-  try { safe = new URL(url.startsWith("http") ? url : "https://" + url); } catch { return null; }
-  
-  const previewSources = [
-    `https://s.wordpress.com/mshots/v1/${encodeURIComponent(safe.href)}?w=600`,
-    `https://image.thum.io/get/width/600/noanimate/${safe.href}`,
-    `https://mini.s-shot.com/600x400/JPEG/600/Z100/?${safe.href}`
-  ];
+  const safe = useMemo(() => {
+    try {
+      return new URL(url.startsWith("http") ? url : `https://${url}`);
+    } catch {
+      return null;
+    }
+  }, [url]);
+  const previewSources = useMemo(() => {
+    if (!safe) return [];
+    return [
+      `https://s.wordpress.com/mshots/v1/${encodeURIComponent(safe.href)}?w=600`,
+      `https://image.thum.io/get/width/600/noanimate/${safe.href}`,
+      `https://mini.s-shot.com/600x400/JPEG/600/Z100/?${safe.href}`
+    ];
+  }, [safe]);
 
-  useEffect(() => { setSt("loading"); setSrcIdx(0); }, [safe.href]);
-  
+  useEffect(() => {
+    setSt("loading");
+    setSrcIdx(0);
+  }, [safe?.href]);
+
+  if (!safe || previewSources.length === 0) return null;
+
   const isSafe = risk === "SAFE";
 
   return (

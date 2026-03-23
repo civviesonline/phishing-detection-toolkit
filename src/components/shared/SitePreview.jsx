@@ -93,7 +93,7 @@ export function SitePreview({ url, risk = "SAFE", label = "Site Preview", hint }
         {stage === "err" && (
           <div style={{ height: 220, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, fontSize: 12, color: "#667" }}>
             <div>Preview unavailable for this URL.</div>
-            <button style={{ ...btnStyle("#1a1a30"), fontSize: 10, padding: "6px 14px" }} onClick={() => setStage("loading")}>
+            <button type="button" style={{ ...btnStyle("#1a1a30"), fontSize: 10, padding: "6px 14px" }} onClick={() => setStage("loading")}>
               Retry services
             </button>
           </div>
@@ -101,7 +101,7 @@ export function SitePreview({ url, risk = "SAFE", label = "Site Preview", hint }
       </div>
       <div className="pg-row" style={{ marginTop: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <span style={{ fontSize: 11, color: "#8899bb" }}>Source: {serviceLabel}</span>
-        <button style={{ ...btnStyle("#22aaff"), fontSize: 11, padding: "6px 14px" }} onClick={nextPreview}>
+        <button type="button" style={{ ...btnStyle("#22aaff"), fontSize: 11, padding: "6px 14px" }} onClick={nextPreview}>
           Cycle global preview
         </button>
       </div>

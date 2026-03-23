@@ -1,32 +1,70 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Card, Label, btnStyle, InfoBox, Tag } from "../shared/UI";
 import { useAnalyst } from "../../contexts/AnalystContext";
 
 const formatLogLine = entry =>
   `[${new Date(entry.timestamp).toISOString()}] ${entry.type.toUpperCase()} ${entry.domain || entry.summary || "detail"} risk=${entry.risk} score=${entry.score ?? "n/a"}`;
 
+const copyText = async text => {
+  if (typeof navigator !== "undefined" && typeof window !== "undefined" && window.isSecureContext && navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      // Fall through to the legacy copy path below.
+    }
+  }
+  if (typeof document === "undefined") return false;
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.top = "-9999px";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  textarea.setSelectionRange(0, textarea.value.length);
+  let copied = false;
+  try {
+    copied = document.execCommand("copy");
+  } catch {
+    copied = false;
+  }
+  document.body.removeChild(textarea);
+  return copied;
+};
+
 export function CLIIntegration() {
   const { history, pinned, togglePin } = useAnalyst();
   const latest = history[0];
   const pinnedState = pinned.includes("cli-log");
   const [copied, setCopied] = useState(false);
+  const [commandCopied, setCommandCopied] = useState(false);
+  const copyTimers = useRef({ log: null, command: null });
 
   const logLine = latest ? formatLogLine(latest) : "No scans yet";
   const exportPayload = useMemo(() => JSON.stringify({ history: history.slice(0, 5) }, null, 2), [history]);
   const CLI_COMMAND = "./launch-phishguard.sh --scan-log phishguard-cli-log.json";
 
+  useEffect(() => () => {
+    Object.values(copyTimers.current).forEach(timer => {
+      if (timer) clearTimeout(timer);
+    });
+  }, []);
+
+  const triggerCopyFeedback = (key, setter) => {
+    setter(true);
+    if (copyTimers.current[key]) clearTimeout(copyTimers.current[key]);
+    copyTimers.current[key] = setTimeout(() => setter(false), 1400);
+  };
+
   const copyLog = async () => {
-    if (navigator.clipboard) {
-      await navigator.clipboard.writeText(logLine);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1400);
-    }
+    if (await copyText(logLine)) triggerCopyFeedback("log", setCopied);
   };
 
   const copyCommand = async () => {
-    if (navigator.clipboard) {
-      await navigator.clipboard.writeText(CLI_COMMAND);
-    }
+    if (await copyText(CLI_COMMAND)) triggerCopyFeedback("command", setCommandCopied);
   };
 
   const downloadJson = () => {
@@ -35,7 +73,9 @@ export function CLIIntegration() {
     const anchor = document.createElement("a");
     anchor.href = url;
     anchor.download = "phishguard-cli-log.json";
+    document.body.appendChild(anchor);
     anchor.click();
+    document.body.removeChild(anchor);
     URL.revokeObjectURL(url);
   };
 
@@ -64,10 +104,10 @@ export function CLIIntegration() {
       </div>
 
       <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
-        <button style={btnStyle(copied ? "#22aaff" : "#00ff88")} onClick={copyLog}>
+        <button type="button" style={btnStyle(copied ? "#22aaff" : "#00ff88")} onClick={copyLog}>
           {copied ? "Copied" : "Copy CLI log"}
         </button>
-        <button style={btnStyle("#6644ff")} onClick={downloadJson}>Download JSON export</button>
+        <button type="button" style={btnStyle("#6644ff")} onClick={downloadJson}>Download JSON export</button>
       </div>
 
       <InfoBox color="#22aaff" style={{ marginTop: 12 }}>
@@ -75,7 +115,9 @@ export function CLIIntegration() {
           <div style={{ fontSize: 12 }}>
             Run <code>{CLI_COMMAND}</code> on Kali to ingest the log and keep terminal workflows in sync.
           </div>
-          <button style={btnStyle("#22aaff")} onClick={copyCommand}>Copy runner</button>
+          <button type="button" style={btnStyle(commandCopied ? "#00ff88" : "#22aaff")} onClick={copyCommand}>
+            {commandCopied ? "Runner copied" : "Copy runner"}
+          </button>
         </div>
       </InfoBox>
     </Card>

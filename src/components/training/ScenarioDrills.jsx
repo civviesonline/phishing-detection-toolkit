@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useTheme, Card, Label, InfoBox, Tag, btnStyle } from "../shared/UI";
 import { MONO, SYNE, RISK_CFG } from "../../data/constants";
+import { Icon } from "../shared/Icon";
 
 export const SCENARIOS_BANK = [
   { type: "url", label: "URL Check", content: "https://accounts.google.com/signin/v2/challenge/pwd", correct: "SAFE", explain: "Legitimate Google authentication URL on google.com. The path is expected for a 2FA challenge." },
@@ -72,7 +73,7 @@ export function ScenarioDrills() {
       <Card>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}><Tag color="#6644ff">{sc.type.toUpperCase()}</Tag><span style={{ fontFamily: SYNE, fontWeight: 700, fontSize: 14, color: "#dde" }}>{sc.label}</span></div>
         <div style={{ background: "#0d0d1e", border: "1px solid #1a1a30", borderRadius: 8, padding: 16, fontFamily: MONO, fontSize: 12, color: "#8899bb", whiteSpace: "pre-wrap", lineHeight: 1.8, marginBottom: 18 }}>{sc.content}</div>
-        {pick === null && <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>{["SAFE", "SUSPICIOUS", "DANGER"].map(r => <button key={r} onClick={() => answer(r)} style={{ ...btnStyle(RISK_CFG[r].color), padding: "14px 28px", fontSize: 14 }}>{RISK_CFG[r].icon} {r}</button>)}</div>}
+        {pick === null && <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>{["SAFE", "SUSPICIOUS", "DANGER"].map(r => <button key={r} type="button" onClick={() => answer(r)} style={{ ...btnStyle(RISK_CFG[r].color), padding: "14px 28px", fontSize: 14, display: "inline-flex", alignItems: "center", gap: 8 }}><Icon name={RISK_CFG[r].icon} size={16} color="#fff" /> {r}</button>)}</div>}
         {pick !== null && <div style={{ animation: "fadeIn .3s ease" }}>
           <InfoBox color={pick === sc.correct ? "#00ff88" : "#ff3355"}>{pick === sc.correct ? `✓ CORRECT! +${Math.max(10, time * 3)} points` : `✕ ${pick === "TIMEOUT" ? "Time's up!" : "Wrong!"} Correct answer: ${sc.correct}`}</InfoBox>
           <div style={{ marginTop: 10, padding: "12px 16px", background: "rgba(102,68,255,.06)", border: "1px solid rgba(102,68,255,.2)", borderRadius: 7, fontSize: 12, color: "#9999dd" }}>💡 {sc.explain}</div>

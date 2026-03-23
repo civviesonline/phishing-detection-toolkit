@@ -1,6 +1,6 @@
-# PhishGuard SOC Edition
+# Circadian by PhishGuard
 
-PhishGuard is a browser-based phishing analysis and training cockpit built with React and Vite. It bundles interactive scanners, analyst-focused insights, and training drills into a single front-end experience.
+Circadian by PhishGuard is a browser-based 24-hour phishing analysis and training cockpit built with React and Vite. It bundles interactive scanners, analyst-focused insights, and training drills into a single front-end experience.
 
 ## Current Modules
 

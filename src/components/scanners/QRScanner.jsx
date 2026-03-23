@@ -139,6 +139,9 @@ export function QRScanner({ onTrigger }) {
   };
 
   useEffect(() => () => { stopCamera(); }, []);
+  useEffect(() => () => {
+    if (preview) URL.revokeObjectURL(preview);
+  }, [preview]);
 
   const riskMeta = res ? (RISK_CFG[res.risk] || RISK_CFG.SAFE) : RISK_CFG.SAFE;
   const detectionHighlights = res ? [
@@ -189,10 +192,10 @@ export function QRScanner({ onTrigger }) {
           )}
 
           <div className="pg-row" style={{ marginTop: "auto", paddingTop: 18, display: "flex", justifyContent: "center", gap: 10 }}>
-            <button style={btnStyle(cameraOn ? "#333" : "#ff3355")} onClick={cameraOn ? stopCamera : startCamera}>
+            <button type="button" style={btnStyle(cameraOn ? "#333" : "#ff3355")} onClick={cameraOn ? stopCamera : startCamera}>
               {cameraOn ? "STOP SCANNER" : "START CAMERA"}
             </button>
-            <button style={btnStyle("#1a1a30")} onClick={() => fileRef.current.click()}>UPLOAD FILE</button>
+            <button type="button" style={btnStyle("#1a1a30")} onClick={() => fileRef.current.click()}>UPLOAD FILE</button>
           </div>
           <input type="file" ref={fileRef} hidden accept="image/*" onChange={e => handleFile(e.target.files[0])} />
         </Card>
@@ -202,12 +205,14 @@ export function QRScanner({ onTrigger }) {
             <Label>Manual Entry / Results</Label>
             <div style={{ marginBottom: 16, display: "flex", flexDirection: isCompact ? "column" : "row", gap: 8 }}>
               <input
+                aria-label="Manual QR or barcode input"
                 style={{ flex: 1, minWidth: 0, background: dark ? "#0a0a18" : "#f5f6fc", border: "1px solid #1a1a30", borderRadius: 6, padding: "12px 14px", color: dark ? "#c8d0e0" : "#1a1a38", fontFamily: MONO, fontSize: 13, outline: "none", boxSizing: "border-box" }}
                 placeholder="Paste decoded text or URL..."
                 value={manualUrl}
                 onChange={e => setManualUrl(e.target.value)}
               />
               <button
+                type="button"
                 style={{ ...btnStyle("#6644ff"), width: isCompact ? "100%" : "auto", alignSelf: isCompact ? "stretch" : "auto" }}
                 onClick={() => {
                   if (!manualUrl) return;
@@ -229,7 +234,7 @@ export function QRScanner({ onTrigger }) {
             </div>
 
             {status && (
-              <div style={{ padding: "12px", background: "#ffcc0015", border: "1px solid #ffcc0033", borderRadius: 6, fontSize: 12, color: "#ffcc00", animation: "fadeIn .3s ease" }}>
+              <div role="status" aria-live="polite" style={{ padding: "12px", background: "#ffcc0015", border: "1px solid #ffcc0033", borderRadius: 6, fontSize: 12, color: "#ffcc00", animation: "fadeIn .3s ease" }}>
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                   <Icon name="info" size={14} color="#ffcc00" />
                   {status}
@@ -277,12 +282,14 @@ export function QRScanner({ onTrigger }) {
             </div>
             <div className="pg-row" style={{ display: "flex", gap: 8, marginBottom: 10 }}>
               <input
+                aria-label="Text to encode as barcode or QR code"
                 style={{ flex: 1, minWidth: 0, background: dark ? "#0a0a18" : "#f5f6fc", border: "1px solid #1a1a30", borderRadius: 6, padding: "12px 14px", color: dark ? "#c8d0e0" : "#1a1a38", fontFamily: MONO, fontSize: 13, outline: "none", boxSizing: "border-box" }}
                 placeholder="https://example.com/login"
                 value={encodeText}
                 onChange={e => setEncodeText(e.target.value)}
               />
               <button
+                type="button"
                 style={btnStyle("#22aaff")}
                 onClick={() => {
                   const src = buildBarcodeSrc();
@@ -295,6 +302,7 @@ export function QRScanner({ onTrigger }) {
 
             <div className="pg-row" style={{ display: "flex", gap: 8, marginBottom: 12 }}>
               <select
+                aria-label="Barcode type"
                 value={barcodeType}
                 onChange={e => {
                   const next = e.target.value;
@@ -311,6 +319,7 @@ export function QRScanner({ onTrigger }) {
                 <option value="code128">Barcode (Code 128)</option>
               </select>
               <select
+                aria-label="Barcode size"
                 value={barcodeSize}
                 onChange={e => {
                   const next = Number(e.target.value);
