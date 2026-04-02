@@ -36,7 +36,7 @@ const copyText = async text => {
 };
 
 export function CLIIntegration() {
-  const { history, pinned, togglePin } = useAnalyst();
+  const { history, pinned, togglePin, cases } = useAnalyst();
   const latest = history[0];
   const pinnedState = pinned.includes("cli-log");
   const [copied, setCopied] = useState(false);
@@ -44,8 +44,19 @@ export function CLIIntegration() {
   const copyTimers = useRef({ log: null, command: null });
 
   const logLine = latest ? formatLogLine(latest) : "No scans yet";
-  const exportPayload = useMemo(() => JSON.stringify({ history: history.slice(0, 5) }, null, 2), [history]);
-  const CLI_COMMAND = "./launch-phishguard.sh --scan-log phishguard-cli-log.json";
+  const exportPayload = useMemo(
+    () =>
+      JSON.stringify(
+        {
+          history: history.slice(0, 5),
+          cases: cases.slice(0, 5)
+        },
+        null,
+        2
+      ),
+    [history, cases]
+  );
+  const CLI_COMMAND = "./launch-circadian.sh --scan-log circadian-cli-log.json";
 
   useEffect(() => () => {
     Object.values(copyTimers.current).forEach(timer => {
@@ -72,7 +83,7 @@ export function CLIIntegration() {
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = "phishguard-cli-log.json";
+    anchor.download = "circadian-cli-log.json";
     document.body.appendChild(anchor);
     anchor.click();
     document.body.removeChild(anchor);
@@ -113,7 +124,7 @@ export function CLIIntegration() {
       <InfoBox color="#22aaff" style={{ marginTop: 12 }}>
         <div className="pg-row" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
           <div style={{ fontSize: 12 }}>
-            Run <code>{CLI_COMMAND}</code> on Kali to ingest the log and keep terminal workflows in sync.
+            Run <code>{CLI_COMMAND}</code> on Kali to ingest the latest scan log and analyst case queue.
           </div>
           <button type="button" style={btnStyle(commandCopied ? "#00ff88" : "#22aaff")} onClick={copyCommand}>
             {commandCopied ? "Runner copied" : "Copy runner"}

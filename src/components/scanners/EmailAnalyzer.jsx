@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useTheme, Card, Label, TrafficLight, ScoreBar, Tag, Flag, InfoBox, Spinner, btnStyle, ThreatIntelligencePanel } from "../shared/UI";
 import { MONO, SYNE, RISK_CFG, CUSTOM_DOMAINS, CUSTOM_KW } from "../../data/constants";
 import { analyzeEmail, playSound } from "../../utils/analysis";
+import { parseRawEmail } from "../../utils/mailInput";
 
 export function EmailAnalyzer({ onTrigger }) {
   const { dark, isMobile } = useTheme();
@@ -10,50 +11,6 @@ export function EmailAnalyzer({ onTrigger }) {
   const [body, setBody] = useState("");
   const [res, setRes] = useState(null);
   const inp = { width: "100%", background: dark ? "#0a0a18" : "#f5f6fc", border: `1px solid ${dark ? "#1a1a38" : "#dde0f0"}`, borderRadius: 7, padding: "13px 17px", fontFamily: MONO, fontSize: 16, color: dark ? "#c8d0e0" : "#1a1a38", outline: "none", boxSizing: "border-box" };
-  const parseRawEmail = (raw) => {
-    const lines = String(raw || "").split(/\r?\n/);
-    let i = 0;
-    const headers = {};
-    for (; i < lines.length; i++) {
-      const line = lines[i];
-      if (!line.trim()) { i++; break; }
-      const m = line.match(/^([A-Za-z-]+):\s*(.*)$/);
-      if (m) headers[m[1].toLowerCase()] = m[2];
-    }
-    if (headers.from || headers.subject) {
-      return {
-        from: headers.from || "",
-        subject: headers.subject || "",
-        body: lines.slice(i).join("\n").trim()
-      };
-    }
-    // Heuristic extraction for copied Gmail/Outlook UI text
-    const clean = lines.map(l => l.trim()).filter(Boolean);
-    const emailMatch = raw.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
-    const heurFrom = emailMatch ? emailMatch[0] : "";
-    const ignorePhrases = ["conversation opened", "skip to content", "using gmail", "inbox", "to me", "unsubscribe", "reply", "forward"];
-    let heurSubject = "";
-    let subjectIdx = -1;
-    for (let idx = 0; idx < clean.length; idx++) {
-      const line = clean[idx];
-      const low = line.toLowerCase();
-      if (ignorePhrases.some(p => low.includes(p))) continue;
-      if (line.includes("@")) continue;
-      if (/\b(am|pm)\b/i.test(line) && /\d{1,2}:\d{2}/.test(line)) continue;
-      if (line.length > 140) continue;
-      heurSubject = line;
-      subjectIdx = idx;
-      break;
-    }
-    const bodyStart = subjectIdx >= 0 ? subjectIdx + 1 : 0;
-    const heurBody = clean.slice(bodyStart).join("\n").trim() || String(raw || "").trim();
-    if (!heurFrom && !heurSubject) return null;
-    return {
-      from: heurFrom,
-      subject: heurSubject,
-      body: heurBody
-    };
-  };
   const scan = () => {
     if (!from.trim() && !subject.trim() && !body.trim()) return;
     try {

@@ -1,9 +1,14 @@
 {
-  "name": "phishguard-app",
+  "name": "circadian-app",
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/circadian.git"
+  },
   "scripts": {
+    "prebuild": "node scripts/generate-site-assets.mjs",
     "dev": "vite --host 127.0.0.1 --port 5173",
     "build": "vite build",
     "preview": "vite preview"

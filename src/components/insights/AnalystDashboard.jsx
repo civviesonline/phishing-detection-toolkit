@@ -5,13 +5,14 @@ import { Icon } from "../shared/Icon";
 
 const WIDGETS = [
   { id: "attack-feed", label: "Live Attack Feed" },
+  { id: "caseboard", label: "Analyst Caseboard" },
   { id: "incident-card", label: "Incident Card" },
   { id: "dashboard", label: "Analyst Dashboard" },
   { id: "cli-log", label: "CLI Log Bridge" }
 ];
 
 export function AnalystDashboard() {
-  const { history, pinned, recommendations, togglePin } = useAnalyst();
+  const { history, pinned, recommendations, togglePin, caseStats } = useAnalyst();
   const totalScans = history.length;
   const dangerCount = history.filter(item => item.risk === "DANGER").length;
   const currentFocus = history[0]?.type?.toUpperCase() ?? "N/A";
@@ -42,12 +43,17 @@ export function AnalystDashboard() {
           <div style={{ fontSize: 10, letterSpacing: 2, color: "#445" }}>Pinned modules</div>
           <div style={{ fontSize: 14, fontWeight: 700, color: "#ffe066" }}>{pinned.length}</div>
         </div>
+        <div style={{ padding: 12, borderRadius: 10, background: "#0d0d1a", border: "1px solid rgba(255,255,255,0.05)" }}>
+          <div style={{ fontSize: 10, letterSpacing: 2, color: "#445" }}>Open cases</div>
+          <div style={{ fontSize: 28, fontWeight: 900, color: "#22aaff" }}>{caseStats.active}</div>
+        </div>
       </div>
 
       <InfoBox color="#22aaff" style={{ marginTop: 12 }}>
         <div>Session history, pinned widgets, and recommendations persist in localStorage for this Kali workstation.</div>
         <div style={{ marginTop: 4, fontSize: 11, color: "#88c8ff" }}>Last sync: {lastScanTime} · {safeContext}</div>
         <div style={{ marginTop: 4, fontSize: 11, color: "#88c8ff" }}>{dangerRatio}% of this session's scans were danger-flagged.</div>
+        <div style={{ marginTop: 4, fontSize: 11, color: "#88c8ff" }}>Queue: {caseStats.active} open · {caseStats.new} waiting triage.</div>
       </InfoBox>
 
       <div style={{ marginTop: 18 }}>

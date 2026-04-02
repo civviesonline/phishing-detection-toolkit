@@ -1,8 +1,9 @@
 #!/bin/bash
-# PhishGuard Launcher Script
+# Circadian Launcher Script
 
-PROJECT_DIR="/home/manlikecivvies/phishguard-app"
-URL="https://phishguard-soc-toolkit.vercel.app/"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$SCRIPT_DIR"
+URL="${CIRCADIAN_URL:-http://127.0.0.1:5173/}"
 
 # Simple CLI helper
 if [[ "$1" == "--scan-log" && -n "$2" ]]; then

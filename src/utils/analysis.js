@@ -163,7 +163,7 @@ export function analyzeURL(raw, CUSTOM_DOMAINS=[], CUSTOM_KW=[]){
     intelligence = {
       tactic: "Analyst Allowlist Override",
       intent: "Trusted Resource",
-      recommendation: "Allowlist overrides make this domain safe while you run PhishGuard on Kali.",
+      recommendation: "Allowlist overrides make this domain safe while you run Circadian on Kali.",
       technicalDetail: "Analyst-curated allowlist bypasses scoring for known good destinations."
     };
   }
@@ -215,7 +215,7 @@ export function analyzeEmail(input, CUSTOM_DOMAINS=[], CUSTOM_KW=[]){
     tactic: "Multi-Vector Phishing",
     intent: "Campaign Level Analysis",
     recommendation: "Flag this email pattern in the SEG (Secure Email Gateway) and perform a wide-scale search for similar messages.",
-    technicalDetail: "PhishGuard detected a coordinated combination of urgency-based social engineering and suspicious link profiles."
+    technicalDetail: "Circadian detected a coordinated combination of urgency-based social engineering and suspicious link profiles."
   };
 
   if (danger.length > 0) {

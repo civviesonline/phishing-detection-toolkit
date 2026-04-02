@@ -49,7 +49,7 @@ export async function submitIOC({ type, value, analysis }) {
     first_seen: now(),
     last_seen: now(),
     sources: [
-      { name: "phishguard", confidence: Math.round(confidence), at: now() }
+      { name: "circadian", confidence: Math.round(confidence), at: now() }
     ],
     related_iocs: type === "url"
       ? [{ type: "domain", value: normalized, id: makeId("ioc", `domain:${normalized}`) }]

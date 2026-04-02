@@ -3,6 +3,7 @@ import { FONTS, MONO, SYNE } from "./data/constants";
 import { ThemeCtx, BrandMark, AlertOverlay } from "./components/shared/UI";
 import { Icon } from "./components/shared/Icon";
 import { URLScanner } from "./components/scanners/URLScanner";
+import { MailReader } from "./components/scanners/MailReader";
 import { EmailAnalyzer } from "./components/scanners/EmailAnalyzer";
 import { QRScanner } from "./components/scanners/QRScanner";
 import { AttachmentScorer } from "./components/scanners/AttachmentScorer";
@@ -13,6 +14,7 @@ import { ScenarioDrills } from "./components/training/ScenarioDrills";
 import { BlocklistManager } from "./components/shared/BlocklistManager";
 import { AnalystProvider, useAnalyst } from "./contexts/AnalystContext";
 import { AttackFeed } from "./components/insights/AttackFeed";
+import { CaseQueue } from "./components/insights/CaseQueue";
 import { MultiVectorCard } from "./components/insights/MultiVectorCard";
 import { AnalystDashboard } from "./components/insights/AnalystDashboard";
 import { CLIIntegration } from "./components/insights/CLIIntegration";
@@ -102,6 +104,7 @@ const NAV = [
     group: "Detection",
     items: [
       { id: "url", icon: "search", label: "URL Scanner" },
+      { id: "reader", icon: "mail", label: "Mail Reader" },
       { id: "email", icon: "mail", label: "Email Analyzer" },
       { id: "qr", icon: "smartphone", label: "QR Scanner" },
       { id: "attach", icon: "paperclip", label: "Attachment Scorer" },
@@ -151,7 +154,7 @@ const HERO_POINTS = [
 
 const HOW_IT_WORKS = [
   "Paste a suspicious link, email, QR code, or filename into the matching scanner.",
-  "Circadian by PhishGuard scores the sample and highlights phishing indicators such as spoofing, shorteners, urgency language, and risky file types.",
+  "Circadian scores the sample and highlights phishing indicators such as spoofing, shorteners, urgency language, and risky file types.",
   "Review the safety verdict, analyst context, and training modules to decide whether to block, report, or escalate."
 ];
 
@@ -280,7 +283,7 @@ function AppShell() {
 
   const currentGroup = NAV.find(group => group.items.some(item => item.id === tab))?.group || "Detection";
   const currentLabel = NAV.flatMap(group => group.items).find(item => item.id === tab)?.label || "Circadian";
-  const productTitle = "Circadian by PhishGuard - 24-Hour Phishing Detection Tool";
+  const productTitle = "Circadian - 24-Hour Phishing Detection Tool";
 
   const themeValue = useMemo(() => ({ dark, setDark, isMobile }), [dark, isMobile]);
 
@@ -306,7 +309,7 @@ function AppShell() {
             <BrandMark size={120} />
             <div style={{ marginTop: 18, textAlign: "center" }}>
               <div style={{ fontWeight: 950, fontSize: 24, letterSpacing: 3, color: "#fff", lineHeight: 1 }}>CIRCADIAN</div>
-              <div style={{ fontSize: 10, letterSpacing: 4, color: "#ff3355", fontWeight: 900, marginTop: 6 }}>BY PHISHGUARD</div>
+              <div style={{ fontSize: 10, letterSpacing: 4, color: "#ff3355", fontWeight: 900, marginTop: 6 }}>THREAT ANALYSIS</div>
             </div>
           </div>
         )}
@@ -322,7 +325,7 @@ function AppShell() {
             <BrandMark size={64} />
             <div style={{ marginTop: 18 }}>
               <div style={{ fontWeight: 950, fontSize: 24, letterSpacing: 2, color: dark ? "#fff" : "#1a1a38", lineHeight: 1 }}>CIRCADIAN</div>
-              <div style={{ fontSize: 10, letterSpacing: 4, color: "#ff3355", fontWeight: 900, marginTop: 6 }}>BY PHISHGUARD</div>
+              <div style={{ fontSize: 10, letterSpacing: 4, color: "#ff3355", fontWeight: 900, marginTop: 6 }}>THREAT ANALYSIS</div>
             </div>
           </div>
 
@@ -400,7 +403,7 @@ function AppShell() {
               </div>
               <h1 style={{ fontSize: heroTitleSize, fontWeight: 950, marginBottom: 16, letterSpacing: -2, color: dark ? "#fff" : "#1a1a38", maxWidth: 780 }}>{productTitle}</h1>
               <p style={{ margin: "0 0 18px", maxWidth: 760, lineHeight: 1.75, color: dark ? "#a9b4cc" : "#4a5578", fontSize: isMobile ? 15 : 16 }}>
-                Circadian by PhishGuard helps teams detect phishing links, analyze suspicious emails, scan QR codes, and review risky attachments from one browser-based security workspace.
+                Circadian helps teams detect phishing links, analyze suspicious emails, scan QR codes, and review risky attachments from one browser-based security workspace.
               </p>
               <div style={{ display: "inline-flex", alignItems: "center", gap: 10, flexWrap: "wrap", maxWidth: "100%", padding: "10px 14px", borderRadius: 999, border: `1px solid ${dark ? "#2a2a50" : "#dde0f0"}`, background: dark ? "rgba(255,255,255,0.02)" : "#ffffff", color: dark ? "#dfe5f4" : "#2a3154", fontSize: 12, fontWeight: 800, letterSpacing: 1.2, textTransform: "uppercase" }}>
                 <span style={{ color: "#ff3355" }}>Active Module</span>
@@ -478,7 +481,7 @@ function AppShell() {
                   >
                     <h2 style={{ margin: "0 0 12px", fontSize: 18, color: dark ? "#fff" : "#1a1a38" }}>Why teams use it</h2>
                     <p style={{ margin: 0, lineHeight: 1.8, color: dark ? "#a9b4cc" : "#526080", fontSize: 14 }}>
-                      Circadian by PhishGuard acts as a phishing detection tool, email scam checker, and link safety checker for analysts, IT teams, and awareness programs that need around-the-clock visibility into suspicious activity.
+                      Circadian acts as a phishing detection tool, email scam checker, and link safety checker for analysts, IT teams, and awareness programs that need around-the-clock visibility into suspicious activity.
                     </p>
                   </section>
                 </div>
@@ -487,6 +490,7 @@ function AppShell() {
 
             <div style={{ animation: "fadeIn .4s ease" }}>
               {tab === "url" && <URLScanner onTrigger={trigger} />}
+              {tab === "reader" && <MailReader onTrigger={trigger} />}
               {tab === "email" && <EmailAnalyzer onTrigger={trigger} />}
               {tab === "qr" && <QRScanner onTrigger={trigger} />}
               {tab === "attach" && <AttachmentScorer onTrigger={trigger} />}
@@ -497,6 +501,7 @@ function AppShell() {
               {tab === "insights" && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
                   <AttackFeed />
+                  <CaseQueue />
                   <MultiVectorCard />
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 20 }}>
                     <AnalystDashboard />
