@@ -124,6 +124,13 @@ export async function getEnrichment({ url, analysis }) {
       negative_hits: analysis?.verification?.search?.negativeHits || [],
       positive_hits: analysis?.verification?.search?.positiveHits || []
     },
+    page: {
+      ok: Boolean(analysis?.verification?.page?.ok),
+      detail: analysis?.verification?.page?.detail || "No live page evidence collected yet.",
+      signals: analysis?.verification?.page?.signals || [],
+      http_targets: analysis?.verification?.page?.relatedHttpTargets || [],
+      suspicious_targets: analysis?.verification?.page?.suspiciousTargetHosts || []
+    },
     verified_at: analysis?.verification?.checkedAt || now(),
     summary: analysis?.verification?.summary || "Live verification has not completed yet.",
     sources: (analysis?.verification?.sources || []).map(source => ({

@@ -78,6 +78,23 @@ export function IOCInspector({ ioc, enrichment }) {
               <div style={{ fontFamily: MONO, fontSize: 11, color: "#8899bb" }}>Negative hits: {(enrichment.search?.negative_hits || []).join(", ") || "none"}</div>
               <div style={{ fontFamily: MONO, fontSize: 11, color: "#8899bb" }}>Positive hints: {(enrichment.search?.positive_hits || []).join(", ") || "none"}</div>
             </div>
+            <div style={{ padding: "10px", border: "1px solid #1a1a30", borderRadius: 8 }}>
+              <div style={{ fontSize: 9, letterSpacing: 2, color: "#556", marginBottom: 6 }}>LIVE PAGE</div>
+              <div style={{ fontFamily: MONO, fontSize: 11, color: "#8899bb" }}>{enrichment.page?.detail || "n/a"}</div>
+              <div style={{ fontFamily: MONO, fontSize: 11, color: "#8899bb", marginTop: 4 }}>
+                Signals: {(enrichment.page?.signals || []).join(", ") || "none"}
+              </div>
+              {(enrichment.page?.http_targets || []).length > 0 && (
+                <div style={{ fontFamily: MONO, fontSize: 11, color: "#ffcc66", marginTop: 4, wordBreak: "break-all" }}>
+                  HTTP targets: {enrichment.page.http_targets.join(" · ")}
+                </div>
+              )}
+              {(enrichment.page?.suspicious_targets || []).length > 0 && (
+                <div style={{ fontFamily: MONO, fontSize: 11, color: "#ff8899", marginTop: 4, wordBreak: "break-all" }}>
+                  Suspicious hosts: {enrichment.page.suspicious_targets.join(" · ")}
+                </div>
+              )}
+            </div>
             <div style={{ fontSize: 11, color: "#6677aa" }}>{enrichment.summary}</div>
           </div>
         )}

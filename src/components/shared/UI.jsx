@@ -201,6 +201,27 @@ export function VerificationPanel({ verification, risk = "UNVERIFIED" }) {
           )}
         </div>
       )}
+      {verification.page && (
+        <div style={{ marginTop: 14, padding: "12px 14px", borderRadius: 10, border: "1px solid rgba(255,204,0,0.16)", background: dark ? "#0a0f1a" : "#ffffff" }}>
+          <div style={{ fontSize: 10, letterSpacing: 2, color: "#667", marginBottom: 6 }}>LIVE PAGE</div>
+          <div style={{ fontSize: 12, color: dark ? "#d7deef" : "#1a1a38" }}>{verification.page.detail || "No live page evidence collected yet."}</div>
+          {verification.page.signals?.length > 0 && (
+            <div style={{ marginTop: 8, fontSize: 11, color: "#8899bb", lineHeight: 1.6 }}>
+              {verification.page.signals.join(" · ")}
+            </div>
+          )}
+          {verification.page.relatedHttpTargets?.length > 0 && (
+            <div style={{ marginTop: 8, fontFamily: MONO, fontSize: 11, color: "#ffcc66", wordBreak: "break-all" }}>
+              HTTP target(s): {verification.page.relatedHttpTargets.join(" · ")}
+            </div>
+          )}
+          {verification.page.suspiciousTargetHosts?.length > 0 && (
+            <div style={{ marginTop: 6, fontFamily: MONO, fontSize: 11, color: "#ff8899", wordBreak: "break-all" }}>
+              Suspicious host(s): {verification.page.suspiciousTargetHosts.join(" · ")}
+            </div>
+          )}
+        </div>
+      )}
       <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
         {sources.map(source => (
           <div key={source.id || source.label} style={{ padding: "12px 14px", borderRadius: 12, border: `1px solid ${source.ok ? "#22aaff33" : "#ffcc0033"}`, background: dark ? "#0a0f1a" : "#ffffff" }}>

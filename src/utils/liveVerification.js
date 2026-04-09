@@ -3,6 +3,7 @@ import { analyzeEmail, analyzeURL } from "./analysis";
 
 const PROBE_TTL_MS = 20_000;
 const URL_CACHE_TTL_MS = 2 * 60_000;
+const URL_CACHE_VERSION = "2026-04-09-http-scrutiny";
 const PROBE_TARGET = "https://dns.google/resolve?name=example.com&type=A";
 const VERIFICATION_REQUIRED_MESSAGE =
   "Internet verification is required before Circadian can mark this result safe, suspicious, or dangerous.";
@@ -25,6 +26,34 @@ const NO_RESULT_PATTERNS = [
   "couldn't find any results",
   "there are no results"
 ];
+const READER_BLOCK_PATTERNS = [
+  "securitycompromiseerror",
+  "anonymous access to domain",
+  "\"code\":451",
+  "\"status\":45102",
+  "ddos attack suspected"
+];
+const PAGE_PARKED_RULES = [
+  { label: "Parked or for-sale domain language detected", pattern: /buy this domain|domain (?:may be )?for sale|this domain is parked|parked free courtesy of|parkingcrew|sedo|bodis|related searches|domain parking|cash parking/i }
+];
+const PAGE_WARNING_RULES = [
+  { label: "Hidden iframe content detected", pattern: /hidden iframe|contains iframe that are currently hidden/i },
+  { label: "Embedded iframe processing warning detected", pattern: /consider enabling iframe processing/i }
+];
+const PAGE_REDIRECT_RULES = [
+  { label: "Script-driven redirect detected", pattern: /window\.location\.(?:replace|assign)|window\.location\s*=|location\.href\s*=/i },
+  { label: "Meta refresh redirect detected", pattern: /http-equiv=["']refresh|meta refresh/i },
+  { label: "Redirect placeholder detected in page source", pattern: /redirect_link/i },
+  { label: "Noscript redirect fallback detected", pattern: /<noscript[\s\S]*http-equiv=["']refresh|noscript.*url=/i },
+  { label: "Forced entry redirect lure detected", pattern: /click here to enter/i }
+];
+const PAGE_TRACKING_RULES = [
+  { label: "Browser fingerprinting script detected", pattern: /fingerprintjs|visitorid/i },
+  { label: "Tracking redirect token detected", pattern: /tr_uuid=|[?&]fp=-?\d+/i },
+  { label: "Hidden redirect container detected", pattern: /display:\s*none/i }
+];
+const ABSOLUTE_URL_RE = /\bhttps?:\/\/[^\s"'<>`)\]]+/gi;
+const SUSPICIOUS_REDIRECT_HOST_RE = /^ww\d+\./i;
 
 const probeCache = { at: 0, value: null };
 const urlCache = new Map();
@@ -61,7 +90,12 @@ const unique = items => [...new Set(items.filter(Boolean))];
 const clamp = value => Math.max(0, Math.min(100, value));
 const DOMAIN_LABEL_RE = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i;
 
-const buildReaderUrl = url => `https://r.jina.ai/http://${url.replace(/^https?:\/\//i, "")}`;
+const buildReaderUrl = url => {
+  const value = String(url || "").trim();
+  if (!value) return "";
+  if (/^https:\/\//i.test(value)) return `https://r.jina.ai/http://${value}`;
+  return `https://r.jina.ai/http://${value.replace(/^http:\/\//i, "")}`;
+};
 
 const withTimeout = async (promise, timeoutMs = 8_000) => {
   let timer = null;
@@ -106,6 +140,15 @@ const normalizeUrl = raw => {
   }
 };
 
+const trimUrlTrail = value => String(value || "").replace(/[),.;!?'"`\]]+$/g, "");
+
+const extractUrlsFromText = text => unique((String(text || "").match(ABSOLUTE_URL_RE) || []).map(trimUrlTrail));
+
+const collectRuleHits = (text, rules) =>
+  rules.filter(rule => rule.pattern.test(text)).map(rule => rule.label);
+
+const isReaderBlocked = text => READER_BLOCK_PATTERNS.some(pattern => text.includes(pattern));
+
 const countMentions = (text, needle) => {
   if (!text || !needle) return 0;
   const haystack = String(text).toLowerCase();
@@ -141,6 +184,10 @@ const mapScoreToRisk = score => (score < 25 ? "SAFE" : score < 55 ? "SUSPICIOUS"
 
 const isIpHostname = hostname => /^\d+\.\d+\.\d+\.\d+$/.test(hostname) || hostname.includes(":");
 
+const isSameHostnameFamily = (candidate, hostname) =>
+  Boolean(candidate && hostname) &&
+  (candidate === hostname || candidate.endsWith(`.${hostname}`) || hostname.endsWith(`.${candidate}`));
+
 const hasLegitimateRegisteredDomain = hostname => {
   if (!hostname || hostname === "localhost" || isIpHostname(hostname)) return false;
   const labels = hostname.split(".").filter(Boolean);
@@ -167,9 +214,24 @@ const makeVerificationSource = patch => ({
   domainMentions: patch.domainMentions || 0
 });
 
-const buildVerificationSummary = ({ minimumSourcesMet, searchMatches, negativeHits, allowlisted, dnsResolved }) => {
+const buildVerificationSummary = ({ minimumSourcesMet, searchMatches, negativeHits, allowlisted, dnsResolved, page }) => {
   if (!minimumSourcesMet) {
+    if (!page?.ok) {
+      return "Circadian could not inspect the live destination content, so the result stays unverified.";
+    }
     return "Circadian could not collect enough live evidence, so the result stays unverified.";
+  }
+  if (page?.warningSignals?.length || page?.parkedSignals?.length) {
+    return `Live page inspection surfaced high-risk landing-page signals: ${[...(page.warningSignals || []), ...(page.parkedSignals || [])].join(", ")}.`;
+  }
+  if (page?.httpDowngrade) {
+    return "The inspected page attempted to downgrade users from HTTPS to HTTP, so Circadian denied a safe verdict.";
+  }
+  if (page?.suspiciousTargetHosts?.length) {
+    return `The inspected page referenced suspicious redirect host(s): ${page.suspiciousTargetHosts.join(", ")}.`;
+  }
+  if (page?.redirectSignals?.length && page?.trackingSignals?.length) {
+    return "Live page inspection found a scripted redirector with tracking or fingerprinting behavior.";
   }
   if (negativeHits.length) {
     return `Live search evidence surfaced reputation warnings for this domain: ${negativeHits.join(", ")}.`;
@@ -190,7 +252,7 @@ const buildUnverifiedIntelligence = detail => ({
   technicalDetail: detail || VERIFICATION_REQUIRED_MESSAGE
 });
 
-const buildVerifiedSummary = ({ risk, httpOnly, registrableDomain, dns, searchMatches, negativeHits }) => {
+const buildVerifiedSummary = ({ risk, httpOnly, registrableDomain, dns, searchMatches, negativeHits, page }) => {
   if (!registrableDomain) {
     return "Circadian confirmed the hostname does not look like a legitimate registered domain, so it cannot be safe.";
   }
@@ -203,11 +265,29 @@ const buildVerifiedSummary = ({ risk, httpOnly, registrableDomain, dns, searchMa
   if (!dns.ok) {
     return "Live DNS could not resolve this domain, so Circadian denied a safe verdict.";
   }
+  if (!page?.ok) {
+    return "Circadian could not inspect the live destination content, so it denied a safe verdict.";
+  }
+  if (page.warningSignals?.length) {
+    return `Live page inspection surfaced high-risk rendering signals: ${page.warningSignals.join(", ")}.`;
+  }
+  if (page.parkedSignals?.length) {
+    return `Live page inspection suggests the domain is acting like a parked or monetized redirector: ${page.parkedSignals.join(", ")}.`;
+  }
+  if (page.httpDowngrade) {
+    return "The inspected page attempted to send users to plain HTTP destinations, which Circadian treats as unsafe.";
+  }
+  if (page.suspiciousTargetHosts?.length) {
+    return `The inspected page referenced suspicious redirect host(s): ${page.suspiciousTargetHosts.join(", ")}.`;
+  }
+  if (page.redirectSignals?.length && page.trackingSignals?.length) {
+    return "Live page inspection found a scripted redirector with tracking or fingerprinting behavior.";
+  }
   if (negativeHits.length) {
     return `Live search evidence surfaced reputation warnings for this domain: ${negativeHits.join(", ")}.`;
   }
   if (risk === "SAFE") {
-    return "Live DNS and multiple search sources corroborated the domain, and Circadian did not find meaningful negative reputation signals.";
+    return "Live DNS, live page inspection, and multiple search sources corroborated the domain, and Circadian did not find meaningful negative reputation signals.";
   }
   if (searchMatches === 0) {
     return "Circadian verified connectivity, but the domain still lacks enough legitimate web corroboration to be treated as safe.";
@@ -307,6 +387,17 @@ async function collectSearchEvidence(domain) {
       try {
         const text = await fetchText(buildReaderUrl(href));
         const lower = text.toLowerCase();
+        if (isReaderBlocked(lower)) {
+          return makeVerificationSource({
+            id: provider.id,
+            label: provider.label,
+            ok: false,
+            href,
+            query,
+            kind: "search",
+            detail: "Search collection was blocked by the reader proxy before Circadian could verify the results."
+          });
+        }
         const noResults = NO_RESULT_PATTERNS.some(pattern => lower.includes(pattern));
         const negativeHits = SEARCH_NEGATIVE_TERMS.filter(term => lower.includes(term));
         const positiveHits = SEARCH_POSITIVE_TERMS.filter(term => lower.includes(term));
@@ -343,6 +434,120 @@ async function collectSearchEvidence(domain) {
   return settled;
 }
 
+async function collectPageEvidence(parsedUrl) {
+  const pageHref = buildReaderUrl(parsedUrl.href);
+
+  try {
+    const text = await fetchText(pageHref);
+    const lower = text.toLowerCase();
+
+    if (isReaderBlocked(lower)) {
+      return {
+        ok: false,
+        detail: "The reader proxy refused to inspect the destination content, so Circadian could not complete live page scrutiny.",
+        excerpt: "",
+        href: pageHref,
+        signals: [],
+        parkedSignals: [],
+        warningSignals: [],
+        redirectSignals: [],
+        trackingSignals: [],
+        targetUrls: [],
+        httpTargets: [],
+        relatedHttpTargets: [],
+        suspiciousTargetHosts: [],
+        httpDowngrade: false,
+        clean: false
+      };
+    }
+
+    const parkedSignals = collectRuleHits(text, PAGE_PARKED_RULES);
+    const warningSignals = collectRuleHits(text, PAGE_WARNING_RULES);
+    const redirectSignals = collectRuleHits(text, PAGE_REDIRECT_RULES);
+    const trackingSignals = collectRuleHits(text, PAGE_TRACKING_RULES);
+    const extractedTargets = extractUrlsFromText(text)
+      .map(target => normalizeUrl(target))
+      .filter(Boolean);
+    const httpTargets = unique(extractedTargets.filter(target => target.protocol === "http:").map(target => target.href));
+    const relatedHttpTargets = unique(
+      extractedTargets
+        .filter(
+          target =>
+            target.protocol === "http:" &&
+            isSameHostnameFamily(target.hostname.toLowerCase(), parsedUrl.hostname.toLowerCase())
+        )
+        .map(target => target.href)
+    );
+    const suspiciousTargetHosts = unique(
+      extractedTargets
+        .map(target => target.hostname.toLowerCase())
+        .filter(hostname => SUSPICIOUS_REDIRECT_HOST_RE.test(hostname))
+    );
+    const httpDowngrade = parsedUrl.protocol === "https:" && relatedHttpTargets.length > 0;
+    const signals = unique([
+      ...parkedSignals,
+      ...warningSignals,
+      ...redirectSignals,
+      ...trackingSignals,
+      httpDowngrade ? "HTTPS page attempts to downgrade visitors to HTTP" : "",
+      suspiciousTargetHosts.length ? `Suspicious redirect host referenced: ${suspiciousTargetHosts.join(", ")}` : ""
+    ]);
+
+    return {
+      ok: true,
+      detail: [
+        "Live page content inspected.",
+        signals.length
+          ? `Signals found: ${signals.join("; ")}.`
+          : "No deceptive landing-page patterns were detected in the readable content.",
+        relatedHttpTargets.length ? `Observed HTTP destination(s): ${relatedHttpTargets.join(" · ")}.` : ""
+      ]
+        .filter(Boolean)
+        .join(" "),
+      excerpt: pickExcerpt(text, parsedUrl.hostname, [
+        "redirect",
+        "http://",
+        "fingerprint",
+        "iframe",
+        "tr_uuid",
+        "parked",
+        "sale",
+        "click here to enter"
+      ]),
+      href: pageHref,
+      signals,
+      parkedSignals,
+      warningSignals,
+      redirectSignals,
+      trackingSignals,
+      targetUrls: unique(extractedTargets.map(target => target.href)),
+      httpTargets,
+      relatedHttpTargets,
+      suspiciousTargetHosts,
+      httpDowngrade,
+      clean: signals.length === 0
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      detail: `Live page inspection failed: ${error.message}`,
+      excerpt: "",
+      href: pageHref,
+      signals: [],
+      parkedSignals: [],
+      warningSignals: [],
+      redirectSignals: [],
+      trackingSignals: [],
+      targetUrls: [],
+      httpTargets: [],
+      relatedHttpTargets: [],
+      suspiciousTargetHosts: [],
+      httpDowngrade: false,
+      clean: false
+    };
+  }
+}
+
 async function collectDnsEvidence(domain) {
   try {
     const result = await fetchJson(`https://dns.google/resolve?name=${encodeURIComponent(domain)}&type=A`);
@@ -368,9 +573,28 @@ async function collectDnsEvidence(domain) {
   }
 }
 
-const buildUrlIntelligence = ({ risk, base, verification, allowlisted, negativeHits }) => {
+const buildUrlIntelligence = ({ risk, base, verification, allowlisted, negativeHits, page }) => {
   if (risk === "UNVERIFIED") {
     return buildUnverifiedIntelligence(verification?.summary);
+  }
+  if (
+    page?.parkedSignals?.length ||
+    page?.warningSignals?.length ||
+    page?.httpDowngrade ||
+    page?.suspiciousTargetHosts?.length ||
+    (page?.redirectSignals?.length && page?.trackingSignals?.length)
+  ) {
+    return {
+      tactic: risk === "DANGER" ? "Deceptive Redirector" : "Suspicious Landing Page",
+      intent: risk === "DANGER" ? "Traffic Hijack / Credential Theft" : "Review Before Interaction",
+      recommendation:
+        risk === "DANGER"
+          ? "Do not interact with this site or submit any information. Block and isolate it until ownership and redirect behavior are independently verified."
+          : "Treat this destination as untrusted until an analyst validates the landing page and its redirect behavior.",
+      technicalDetail:
+        verification?.summary ||
+        "Live page inspection found redirect, iframe, parking, or HTTP-downgrade behavior that prevented a safe verdict."
+    };
   }
   if (negativeHits.length) {
     return {
@@ -435,7 +659,7 @@ export async function analyzeUrlWithInternet(raw, customDomains = [], customKeyw
     };
   }
 
-  const cacheKey = parsed.href.toLowerCase();
+  const cacheKey = `${URL_CACHE_VERSION}:${parsed.href.toLowerCase()}`;
   const cached = readCache(cacheKey);
   if (cached) return cached;
 
@@ -464,9 +688,10 @@ export async function analyzeUrlWithInternet(raw, customDomains = [], customKeyw
     );
   }
 
-  const [dns, searchSources] = await Promise.all([
+  const [dns, searchSources, page] = await Promise.all([
     collectDnsEvidence(parsed.hostname.toLowerCase()),
-    collectSearchEvidence(parsed.hostname.toLowerCase())
+    collectSearchEvidence(parsed.hostname.toLowerCase()),
+    collectPageEvidence(parsed)
   ]);
 
   const registrableDomain = hasLegitimateRegisteredDomain(parsed.hostname.toLowerCase());
@@ -477,10 +702,18 @@ export async function analyzeUrlWithInternet(raw, customDomains = [], customKeyw
   const negativeHits = unique(successfulSearches.flatMap(source => source.negativeHits));
   const positiveSearchHits = unique(successfulSearches.flatMap(source => source.positiveHits));
   const explicitDnsFailure = dns.rawStatus !== null && !dns.ok;
+  const strongPageConcern =
+    page.httpDowngrade ||
+    page.warningSignals.length > 0 ||
+    page.parkedSignals.length > 0 ||
+    page.suspiciousTargetHosts.length > 0 ||
+    (page.redirectSignals.length > 0 && page.trackingSignals.length > 0);
+  const pageConcern = page.ok && (strongPageConcern || page.redirectSignals.length > 0 || page.trackingSignals.length > 0);
   const canIssueFinalVerdict =
     !registrableDomain ||
     explicitDnsFailure ||
-    (dns.ok && successfulSearches.length >= 2) ||
+    pageConcern ||
+    (dns.ok && successfulSearches.length >= 2 && page.ok) ||
     (negativeHits.length > 0 && successfulSearches.length >= 1);
   const dnsSource = makeVerificationSource({
     id: "google-dns",
@@ -491,8 +724,17 @@ export async function analyzeUrlWithInternet(raw, customDomains = [], customKeyw
     detail: dns.detail,
     excerpt: dns.addresses.join(", ")
   });
+  const pageSource = makeVerificationSource({
+    id: "live-page",
+    label: "Live page inspection",
+    ok: page.ok,
+    href: page.href,
+    kind: "page",
+    detail: page.detail,
+    excerpt: page.excerpt
+  });
 
-  const sources = [probe.source, dnsSource, ...searchSources];
+  const sources = [probe.source, dnsSource, pageSource, ...searchSources];
   const successfulSources = sources.filter(source => source.ok);
   const minimumSourcesMet = canIssueFinalVerdict;
   const coverage = clamp(Math.round((successfulSources.length / sources.length) * 100));
@@ -503,13 +745,20 @@ export async function analyzeUrlWithInternet(raw, customDomains = [], customKeyw
   else if (explicitDnsFailure) score = Math.max(score, httpOnly || negativeHits.length ? 74 : 58);
   if (negativeHits.length) score = clamp(Math.max(score, 48) + Math.min(negativeHits.length * 12, 24));
   if (dns.ok && successfulSearches.length >= 2 && searchMatches === 0) score = Math.max(score, 34);
-  if (allowlisted && dns.ok && searchMatches >= 2 && negativeHits.length === 0 && !httpOnly) score = Math.min(score, 18);
+  if (page.redirectSignals.length) score = clamp(Math.max(score, 44) + Math.min(page.redirectSignals.length * 5, 10));
+  if (page.trackingSignals.length) score = clamp(Math.max(score, 50) + Math.min(page.trackingSignals.length * 5, 10));
+  if (page.warningSignals.length) score = clamp(Math.max(score, 72) + Math.min(page.warningSignals.length * 6, 12));
+  if (page.parkedSignals.length) score = clamp(Math.max(score, 72) + Math.min(page.parkedSignals.length * 6, 12));
+  if (page.httpDowngrade) score = Math.max(score, page.redirectSignals.length || page.trackingSignals.length ? 86 : 58);
+  if (page.suspiciousTargetHosts.length) score = clamp(Math.max(score, 78) + Math.min(page.suspiciousTargetHosts.length * 5, 10));
+  if (!page.ok && dns.ok && successfulSearches.length >= 2 && negativeHits.length === 0) score = Math.max(score, 26);
+  if (allowlisted && dns.ok && searchMatches >= 2 && negativeHits.length === 0 && !httpOnly && page.ok && page.clean) score = Math.min(score, 18);
 
   let risk = mapScoreToRisk(score);
 
   if (!registrableDomain) {
     risk = "DANGER";
-  } else if (!minimumSourcesMet && !(httpOnly || explicitDnsFailure || negativeHits.length || base.score >= 55)) {
+  } else if (!minimumSourcesMet && !(httpOnly || explicitDnsFailure || negativeHits.length || base.score >= 55 || pageConcern)) {
     const verification = {
       mode: "internet",
       checkedAt: new Date().toISOString(),
@@ -521,10 +770,12 @@ export async function analyzeUrlWithInternet(raw, customDomains = [], customKeyw
         searchMatches,
         negativeHits,
         allowlisted,
-        dnsResolved: dns.ok
+        dnsResolved: dns.ok,
+        page
       }),
       sources,
       dns,
+      page,
       search: {
         sources: searchSources,
         matches: readableSearches.length,
@@ -535,7 +786,7 @@ export async function analyzeUrlWithInternet(raw, customDomains = [], customKeyw
     return writeCache(cacheKey, makeUnverifiedResult({ base, raw, reason: verification.summary, verification }));
   }
 
-  if (risk === "SAFE" && !(dns.ok && searchMatches >= 2 && negativeHits.length === 0 && registrableDomain && !httpOnly)) {
+  if (risk === "SAFE" && !(dns.ok && searchMatches >= 2 && negativeHits.length === 0 && registrableDomain && !httpOnly && page.ok && page.clean)) {
     score = Math.max(score, 28);
     risk = "SUSPICIOUS";
   }
@@ -546,6 +797,16 @@ export async function analyzeUrlWithInternet(raw, customDomains = [], customKeyw
     httpOnly ? "HTTP-only sites can never be marked safe" : "",
     dns.rawStatus === 3 ? "Domain did not resolve in live DNS (possible unregistered or non-existent domain)" : "",
     dns.ok ? "Live DNS resolution confirmed before verdict" : "Live DNS resolution could not be confirmed",
+    page.ok ? "Live destination content inspected before verdict" : "Live destination content could not be inspected",
+    ...page.warningSignals.map(signal => `Live page signal: ${signal}`),
+    ...page.parkedSignals.map(signal => `Live page signal: ${signal}`),
+    ...page.redirectSignals.map(signal => `Live page signal: ${signal}`),
+    ...page.trackingSignals.map(signal => `Live page signal: ${signal}`),
+    page.httpDowngrade ? "Live page attempted to downgrade users from HTTPS to HTTP" : "",
+    page.relatedHttpTargets.length ? `Observed HTTP destination(s): ${page.relatedHttpTargets.join(" · ")}` : "",
+    page.suspiciousTargetHosts.length
+      ? `Live page referenced suspicious redirect host(s): ${page.suspiciousTargetHosts.join(", ")}`
+      : "",
     readableSearches.length
       ? `${readableSearches.length} live search source(s) returned readable evidence`
       : "Search sources did not provide readable evidence",
@@ -561,9 +822,10 @@ export async function analyzeUrlWithInternet(raw, customDomains = [], customKeyw
     online: true,
     minimumSourcesMet,
     coverage,
-    summary: buildVerifiedSummary({ risk, httpOnly, registrableDomain, dns, searchMatches, negativeHits }),
+    summary: buildVerifiedSummary({ risk, httpOnly, registrableDomain, dns, searchMatches, negativeHits, page }),
     sources,
     dns,
+    page,
     search: {
       sources: searchSources,
       matches: readableSearches.length,
@@ -580,7 +842,7 @@ export async function analyzeUrlWithInternet(raw, customDomains = [], customKeyw
     confidence: clamp(Math.round(30 + score * 0.45 + coverage * 0.3)),
     flags,
     verification,
-    intelligence: buildUrlIntelligence({ risk, base, verification, allowlisted, negativeHits })
+    intelligence: buildUrlIntelligence({ risk, base, verification, allowlisted, negativeHits, page })
   };
 
   return writeCache(cacheKey, result);
