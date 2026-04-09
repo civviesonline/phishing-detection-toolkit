@@ -66,18 +66,19 @@ export function IOCInspector({ ioc, enrichment }) {
         {enrichment && (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <div style={{ padding: "10px", border: "1px solid #1a1a30", borderRadius: 8 }}>
-              <div style={{ fontSize: 9, letterSpacing: 2, color: "#556", marginBottom: 6 }}>WHOIS</div>
-              <div style={{ fontFamily: MONO, fontSize: 11, color: "#8899bb" }}>Registrar: {enrichment.whois?.registrar || "n/a"}</div>
-              <div style={{ fontFamily: MONO, fontSize: 11, color: "#8899bb" }}>Created: {enrichment.whois?.created || "n/a"}</div>
+              <div style={{ fontSize: 9, letterSpacing: 2, color: "#556", marginBottom: 6 }}>LIVE DNS</div>
+              <div style={{ fontFamily: MONO, fontSize: 11, color: "#8899bb" }}>{enrichment.dns?.detail || "n/a"}</div>
+              {enrichment.dns?.addresses?.length > 0 && (
+                <div style={{ fontFamily: MONO, fontSize: 11, color: "#8899bb", marginTop: 4 }}>{enrichment.dns.addresses.join(" · ")}</div>
+              )}
             </div>
             <div style={{ padding: "10px", border: "1px solid #1a1a30", borderRadius: 8 }}>
-              <div style={{ fontSize: 9, letterSpacing: 2, color: "#556", marginBottom: 6 }}>PASSIVE DNS</div>
-              {(enrichment.passive_dns?.ip_history || []).map((ip, i) => (
-                <div key={i} style={{ fontFamily: MONO, fontSize: 11, color: "#8899bb" }}>
-                  {ip.ip} · {ip.first_seen} → {ip.last_seen}
-                </div>
-              ))}
+              <div style={{ fontSize: 9, letterSpacing: 2, color: "#556", marginBottom: 6 }}>SEARCH CORROBORATION</div>
+              <div style={{ fontFamily: MONO, fontSize: 11, color: "#8899bb" }}>Readable sources: {enrichment.search?.matches || 0}</div>
+              <div style={{ fontFamily: MONO, fontSize: 11, color: "#8899bb" }}>Negative hits: {(enrichment.search?.negative_hits || []).join(", ") || "none"}</div>
+              <div style={{ fontFamily: MONO, fontSize: 11, color: "#8899bb" }}>Positive hints: {(enrichment.search?.positive_hits || []).join(", ") || "none"}</div>
             </div>
+            <div style={{ fontSize: 11, color: "#6677aa" }}>{enrichment.summary}</div>
           </div>
         )}
       </Card>

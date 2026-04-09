@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Card, Label, btnStyle, InfoBox, Tag } from "../shared/UI";
+import { getRiskColor } from "../../data/constants";
 import { useAnalyst } from "../../contexts/AnalystContext";
 
 const formatLogLine = entry =>
@@ -104,7 +105,7 @@ export function CLIIntegration() {
 
       <div style={{ marginTop: 12, borderRadius: 8, background: "#070712", padding: "12px 14px", border: "1px solid rgba(255,255,255,0.08)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <Tag color={latest ? (latest.risk === "SAFE" ? "#00ff88" : latest.risk === "DANGER" ? "#ff3355" : "#ffcc00") : "#667"}>
+          <Tag color={latest ? getRiskColor(latest.risk) : "#667"}>
             {latest ? latest.risk : "PENDING"}
           </Tag>
           <span style={{ fontSize: 11, color: "#445" }}>Latest CLI log</span>

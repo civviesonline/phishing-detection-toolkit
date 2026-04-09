@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useTheme, Card, Label, TrafficLight, ScoreBar, Tag, Flag, InfoBox, Spinner, btnStyle, ThreatIntelligencePanel } from "../shared/UI";
 import { MONO, SYNE, RISK_CFG, CUSTOM_DOMAINS, CUSTOM_KW } from "../../data/constants";
-import { analyzeEmail, playSound } from "../../utils/analysis";
+import { playSound } from "../../utils/analysis";
+import { analyzeEmailWithInternet } from "../../utils/liveVerification";
 import { parseRawEmail } from "../../utils/mailInput";
 
 export function EmailAnalyzer({ onTrigger }) {
@@ -10,11 +11,13 @@ export function EmailAnalyzer({ onTrigger }) {
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [res, setRes] = useState(null);
+  const [analyzing, setAnalyzing] = useState(false);
   const inp = { width: "100%", background: dark ? "#0a0a18" : "#f5f6fc", border: `1px solid ${dark ? "#1a1a38" : "#dde0f0"}`, borderRadius: 7, padding: "13px 17px", fontFamily: MONO, fontSize: 16, color: dark ? "#c8d0e0" : "#1a1a38", outline: "none", boxSizing: "border-box" };
-  const scan = () => {
+  const scan = async () => {
     if (!from.trim() && !subject.trim() && !body.trim()) return;
+    setAnalyzing(true);
     try {
-      const r = analyzeEmail({ from, subject, body }, CUSTOM_DOMAINS, CUSTOM_KW);
+      const r = await analyzeEmailWithInternet({ from, subject, body }, CUSTOM_DOMAINS, CUSTOM_KW);
       if (!r || !r.risk) throw new Error("Analysis returned empty result");
       setRes(r);
       onTrigger?.({
@@ -28,8 +31,8 @@ export function EmailAnalyzer({ onTrigger }) {
       playSound(r.risk);
     } catch {
       setRes({
-        score: 100,
-        risk: "DANGER",
+        score: 0,
+        risk: "UNVERIFIED",
         keywords: [],
         urgency: [],
         linkCount: 0,
@@ -38,13 +41,24 @@ export function EmailAnalyzer({ onTrigger }) {
         senderFlags: ["Analysis failed — check email format"],
         hiddenRedirects: 0,
         deobEscalations: 0,
+        verification: {
+          mode: "email",
+          checkedAt: new Date().toISOString(),
+          online: false,
+          minimumSourcesMet: false,
+          coverage: 0,
+          summary: "Circadian could not finish the live verification pass for this email.",
+          sources: []
+        },
         intelligence: {
-          tactic: "Analysis Failure",
+          tactic: "Verification Failure",
           intent: "Unknown",
-          recommendation: "Verify sender and links manually.",
-          technicalDetail: "Parsing error while processing the email content."
+          recommendation: "Retry the email analysis with internet access and review the live source links before trusting the verdict.",
+          technicalDetail: "Parsing or live verification failed while processing the email content."
         }
       });
+    } finally {
+      setAnalyzing(false);
     }
   };
   return (
@@ -72,7 +86,7 @@ export function EmailAnalyzer({ onTrigger }) {
         }}
       />
       <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: 10, marginTop: 10, alignItems: isMobile ? "stretch" : "center" }}>
-        <button style={{ ...btnStyle("#ff9900"), width: isMobile ? "100%" : "auto" }} onClick={scan}>ANALYZE EMAIL</button>
+        <button style={{ ...btnStyle("#ff9900"), width: isMobile ? "100%" : "auto" }} onClick={scan}>{analyzing ? "VERIFYING EMAIL..." : "ANALYZE EMAIL"}</button>
         {res && (
           <button
             style={{
@@ -92,12 +106,18 @@ export function EmailAnalyzer({ onTrigger }) {
           </button>
         )}
       </div>
+      {analyzing && <InfoBox color="#22aaff"><Spinner color="#22aaff" size={14} />Collecting live search and DNS evidence for URLs in the message…</InfoBox>}
       {res && (
         <EmailRenderBoundary>
           <div style={{ animation: "fadeIn .3s ease" }}>
         <Card border={RISK_CFG[res.risk]?.color + "55"} style={{ marginTop: 16 }}>
           <TrafficLight risk={res.risk} />
           <ScoreBar score={res.score ?? 0} risk={res.risk} />
+          {res.verification?.summary && (
+            <InfoBox color={res.risk === "UNVERIFIED" ? "#22aaff" : "#22aaff"}>
+              {res.verification.summary}
+            </InfoBox>
+          )}
           <ThreatIntelligencePanel intelligence={res.intelligence} risk={res.risk} />
           <div style={{ display: "flex", gap: 12, marginTop: 18, flexWrap: "wrap" }}>
             {[["Keywords", res.keywords?.length ?? 0, "#ff3355"], ["Urgency", res.urgency?.length ?? 0, "#ffcc00"], ["Links", res.linkCount ?? 0, "#6699ff"], ["Hidden Redirects", res.hiddenRedirects || 0, "#22aaff"], ["Escalated Links", res.deobEscalations || 0, "#9977ff"], ["Attachment", res.hasAttach ? "YES" : "NO", res.hasAttach ? "#ff3355" : "#00ff88"]].map(([l, v, c], i) => (
@@ -110,7 +130,7 @@ export function EmailAnalyzer({ onTrigger }) {
           {res.keywords?.length > 0 && <div style={{ marginTop: 14 }}><Label>Flagged Terms</Label><div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>{res.keywords.map((k, i) => <Tag key={"k" + i} color="#ff3355">{k}</Tag>)}{(res.urgency || []).map((k, i) => <Tag key={"u" + i} color="#ffcc00">{k}</Tag>)}</div></div>}
           {res.senderFlags?.length > 0 && <div style={{ marginTop: 14 }}><Label>Sender Analysis</Label>{res.senderFlags.map((f, i) => <Flag key={i} f={f} />)}</div>}
           {res.scannedLinks?.length > 0 && <div style={{ marginTop: 14 }}><Label>URLs in Email ({res.scannedLinks.length})</Label>{res.scannedLinks.map((l, i) => {
-            const c = RISK_CFG[l.risk] || RISK_CFG.SAFE;
+            const c = RISK_CFG[l.risk] || RISK_CFG.UNVERIFIED;
             const directRisk = l.direct?.risk || l.risk;
             const finalRisk = l.deob?.finalAnalysis?.risk || directRisk;
             return (
@@ -123,6 +143,7 @@ export function EmailAnalyzer({ onTrigger }) {
                   <span style={{ fontFamily: SYNE, fontWeight: 800, fontSize: 11, color: c.color, flexShrink: 0 }}>{l.risk}</span>
                 </div>
                 {l.deob?.hopCount > 0 && <InfoBox color="#22aaff" style={{ marginTop: 8 }}>Hidden redirect chain: {l.deob.hopCount} hop(s) · final destination risk: <span style={{ fontFamily: SYNE, fontWeight: 800, marginLeft: 4 }}>{finalRisk}</span></InfoBox>}
+                {l.verification?.summary && <div style={{ marginTop: 8, fontSize: 11, color: "#6677aa" }}>{l.verification.summary}</div>}
                 {(directRisk !== l.risk || finalRisk !== directRisk) && <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
                   <Tag color="#6677aa">Direct: {directRisk}</Tag>
                   <Tag color="#22aaff">Final: {finalRisk}</Tag>

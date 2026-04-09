@@ -1,14 +1,15 @@
 import React, { useState } from "react";
 import { useTheme, Card, Label, TrafficLight, ScoreBar, Tag, Flag, btnStyle } from "../shared/UI";
-import { MONO, RISK_CFG } from "../../data/constants";
+import { MONO, RISK_CFG, getRiskColor } from "../../data/constants";
 import { analyzeAttachment, playSound } from "../../utils/analysis";
+import { gateLocalVerdict } from "../../utils/liveVerification";
 
 export function AttachmentScorer({ onTrigger }) {
   const { dark } = useTheme();
   const [file, setFile] = useState(""), [res, setRes] = useState(null);
-  const scan = () => {
+  const scan = async () => {
     if (!file.trim()) return;
-    const r = analyzeAttachment(file.trim());
+    const r = await gateLocalVerdict(() => analyzeAttachment(file.trim()), "attachment analysis");
     setRes(r);
     onTrigger?.({
       type: "attachment",
@@ -28,12 +29,13 @@ export function AttachmentScorer({ onTrigger }) {
         <button style={btnStyle("#ff3355")} onClick={scan}>SCORE FILE</button>
       </div>
       {res && <div style={{ animation: "fadeIn .3s ease" }}>
-        <Card border={RISK_CFG[res.risk].color + "55"} style={{ marginTop: 16 }}>
+        <Card border={(RISK_CFG[res.risk] || RISK_CFG.UNVERIFIED).color + "55"} style={{ marginTop: 16 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <TrafficLight risk={res.risk} />
-            <div style={{ textAlign: "right" }}><div style={{ fontFamily: MONO, color: "#445", fontSize: 10, letterSpacing: 2 }}>LAST EXTENSION</div><Tag color={res.risk === "DANGER" ? "#ff3355" : "#00ff88"}>.{res.lastExt || "none"}</Tag></div>
+            <div style={{ textAlign: "right" }}><div style={{ fontFamily: MONO, color: "#445", fontSize: 10, letterSpacing: 2 }}>LAST EXTENSION</div><Tag color={getRiskColor(res.risk)}>.{res.lastExt || "none"}</Tag></div>
           </div>
           <ScoreBar score={res.score} risk={res.risk} />
+          {res.verification?.summary && <div style={{ marginTop: 10, fontSize: 12, color: "#6677aa" }}>{res.verification.summary}</div>}
           {res.flags.length > 0 && <div style={{ marginTop: 18 }}><Label>File Indicators</Label>{res.flags.map((f, i) => <Flag key={i} f={f} />)}</div>}
         </Card>
       </div>}

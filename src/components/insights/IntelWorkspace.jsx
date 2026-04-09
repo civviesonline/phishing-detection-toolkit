@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Card, Label, Spinner, ResultCard, ThreatIntelligencePanel, btnStyle, useTheme, InfoBox } from "../shared/UI";
-import { analyzeURL } from "../../utils/analysis";
+import { Card, Label, Spinner, ResultCard, ThreatIntelligencePanel, btnStyle, useTheme, InfoBox, VerificationPanel } from "../shared/UI";
 import { submitIOC, getDetonationArtifacts, getEnrichment } from "../../utils/api";
+import { analyzeUrlWithInternet } from "../../utils/liveVerification";
 import { IOCInspector } from "./IOCInspector";
 import { DetonationChain } from "./DetonationChain";
 
@@ -15,7 +15,7 @@ export function IntelWorkspace() {
   const [loading, setLoading] = useState(false);
   const timerRef = useRef(null);
 
-  const run = () => {
+  const run = async () => {
     if (!input.trim()) return;
     if (timerRef.current) clearTimeout(timerRef.current);
     setLoading(true);
@@ -24,14 +24,16 @@ export function IntelWorkspace() {
     setEnrichment(null);
     setArtifacts(null);
 
-    const result = analyzeURL(input.trim());
-    setRes(result);
+    try {
+      const result = await analyzeUrlWithInternet(input.trim());
+      setRes(result);
 
-    submitIOC({ type: "url", value: input.trim(), analysis: result }).then(setIoc);
-    getEnrichment({ url: input.trim(), analysis: result }).then(setEnrichment);
-    getDetonationArtifacts({ url: input.trim(), analysis: result }).then(setArtifacts);
-
-    timerRef.current = setTimeout(() => setLoading(false), 120);
+      submitIOC({ type: "url", value: input.trim(), analysis: result }).then(setIoc);
+      getEnrichment({ url: input.trim(), analysis: result }).then(setEnrichment);
+      getDetonationArtifacts({ url: input.trim(), analysis: result }).then(setArtifacts);
+    } finally {
+      timerRef.current = setTimeout(() => setLoading(false), 120);
+    }
   };
 
   useEffect(() => () => {
@@ -63,6 +65,7 @@ export function IntelWorkspace() {
         <>
           <ResultCard result={res} />
           <ThreatIntelligencePanel intelligence={res.intelligence} risk={res.risk} />
+          <VerificationPanel verification={res.verification} risk={res.risk} />
         </>
       )}
 

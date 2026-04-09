@@ -1,13 +1,14 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useTheme, Card, Label, Spinner, Tag, btnStyle, ScoreBar } from "../shared/UI";
-import { MONO, SYNE, RISK_CFG, CUSTOM_DOMAINS, CUSTOM_KW } from "../../data/constants";
-import { analyzeURL, playSound } from "../../utils/analysis";
+import { MONO, SYNE, RISK_CFG, RISK_ORDER, CUSTOM_DOMAINS, CUSTOM_KW } from "../../data/constants";
+import { playSound } from "../../utils/analysis";
+import { analyzeManyUrlsWithInternet } from "../../utils/liveVerification";
 
 export function BulkScanner({ onTrigger }) {
   const { dark } = useTheme();
   const [input, setInput] = useState(""), [results, setResults] = useState([]), [scanning, setScanning] = useState(false);
   const scanTimer = useRef(null);
-  const run = () => {
+  const run = async () => {
     const urls = input.split(/\n|,/).map(s => s.trim()).filter(s => s.length > 3);
     if (!urls.length) return;
     if (scanTimer.current) {
@@ -15,10 +16,9 @@ export function BulkScanner({ onTrigger }) {
     }
     setScanning(true); setResults([]);
     try {
-      const res = urls.map(u => ({ url: u, ...analyzeURL(u, CUSTOM_DOMAINS, CUSTOM_KW) }));
+      const res = (await analyzeManyUrlsWithInternet(urls, CUSTOM_DOMAINS, CUSTOM_KW)).map((entry, index) => ({ url: urls[index], ...entry }));
       setResults(res);
-      const rank = { SAFE: 0, SUSPICIOUS: 1, DANGER: 2 };
-      const maxRisk = res.reduce((acc, entry) => (rank[entry.risk] > rank[acc] ? entry.risk : acc), "SAFE");
+      const maxRisk = res.reduce((acc, entry) => (RISK_ORDER[entry.risk] > RISK_ORDER[acc] ? entry.risk : acc), "UNVERIFIED");
       const avgScore = Math.round(res.reduce((sum, entry) => sum + (entry.score || 0), 0) / res.length);
       onTrigger?.({
         type: "bulk",
@@ -43,7 +43,7 @@ export function BulkScanner({ onTrigger }) {
       {scanning && <div style={{ textAlign: "center", padding: "40px 0" }}><Spinner size={32} /></div>}
       {results.length > 0 && <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 10 }}>
         {results.map((r, i) => {
-          const c = RISK_CFG[r.risk] || RISK_CFG.SAFE;
+          const c = RISK_CFG[r.risk] || RISK_CFG.UNVERIFIED;
           return (
             <div key={i} style={{ background: "#0d0d1e", border: `1px solid ${c.color}33`, borderRadius: 8, padding: "12px 16px", animationName: "fadeIn", animationDuration: ".2s", animationTimingFunction: "ease", animationFillMode: "forwards", animationDelay: `${i * .05}s`, opacity: 0 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
@@ -51,6 +51,7 @@ export function BulkScanner({ onTrigger }) {
                 <Tag color={c.color}>{r.risk}</Tag>
               </div>
               <ScoreBar score={r.score} risk={r.risk} />
+              {r.verification?.summary && <div style={{ marginTop: 8, fontSize: 11, color: "#6677aa" }}>{r.verification.summary}</div>}
             </div>
           );
         })}

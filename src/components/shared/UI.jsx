@@ -25,7 +25,7 @@ export const Spinner = ({ color = "#ff3355", size = 20 }) => (
 );
 
 export function TrafficLight({ risk }) {
-  const c = RISK_CFG[risk] || RISK_CFG.SAFE;
+  const c = RISK_CFG[risk] || RISK_CFG.UNVERIFIED;
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
       <div style={{ width: 58, height: 58, borderRadius: "50%", background: c.color, boxShadow: `0 0 28px ${c.color},0 0 56px ${c.glow}`, display: "flex", alignItems: "center", justifyContent: "center", color: "#000", animation: "pulse 1.4s ease-in-out infinite" }}>
@@ -37,21 +37,23 @@ export function TrafficLight({ risk }) {
 }
 
 export function ScoreBar({ score, risk }) {
-  const c = RISK_CFG[risk] || RISK_CFG.SAFE, [w, setW] = useState(0);
+  const c = RISK_CFG[risk] || RISK_CFG.UNVERIFIED, [w, setW] = useState(0);
+  const label = risk === "UNVERIFIED" ? "LOCAL SIGNAL SCORE" : "THREAT SCORE";
   useEffect(() => { const t = setTimeout(() => setW(score), 80); return () => clearTimeout(t); }, [score]);
   return (
     <div style={{ marginTop: 14 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontFamily: MONO, fontSize: 12, color: "#445", letterSpacing: 2 }}><span>THREAT SCORE</span><span style={{ color: c.color }}>{score}/100</span></div>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontFamily: MONO, fontSize: 12, color: "#445", letterSpacing: 2 }}><span>{label}</span><span style={{ color: c.color }}>{score}/100</span></div>
       <div style={{ height: 7, background: "#0d0d1e", borderRadius: 3, overflow: "hidden" }}><div style={{ width: `${w}%`, height: "100%", background: `linear-gradient(90deg,${c.color}66,${c.color})`, transition: "width .9s cubic-bezier(.22,1,.36,1)", boxShadow: `0 0 10px ${c.color}`, borderRadius: 3 }} /></div>
     </div>
   );
 }
 
 export function ConfidenceMeter({ confidence = 0, risk = "SAFE" }) {
-  const c = RISK_CFG[risk] || RISK_CFG.SAFE;
+  const c = RISK_CFG[risk] || RISK_CFG.UNVERIFIED;
+  const label = risk === "UNVERIFIED" ? "VERIFICATION COVERAGE" : "CONFIDENCE";
   return (
     <div style={{ marginTop: 10 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontFamily: MONO, fontSize: 10, color: "#445", letterSpacing: 2 }}><span>CONFIDENCE</span><span style={{ color: c.color }}>{confidence}%</span></div>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontFamily: MONO, fontSize: 10, color: "#445", letterSpacing: 2 }}><span>{label}</span><span style={{ color: c.color }}>{confidence}%</span></div>
       <div style={{ height: 5, background: "#0d0d1e", borderRadius: 3, overflow: "hidden" }}><div style={{ width: `${Math.max(0, Math.min(100, confidence))}%`, height: "100%", background: `linear-gradient(90deg,${c.color}55,${c.color})`, boxShadow: `0 0 10px ${c.color}`, borderRadius: 3 }} /></div>
     </div>
   );
@@ -109,7 +111,7 @@ export function AlertOverlay({ level, onDismiss }) {
 }
 
 export function ResultCard({ result }) {
-  const c = RISK_CFG[result.risk] || RISK_CFG.SAFE;
+  const c = RISK_CFG[result.risk] || RISK_CFG.UNVERIFIED;
   return (
     <Card border={c.color + "55"} style={{ marginTop: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
@@ -118,6 +120,12 @@ export function ResultCard({ result }) {
       </div>
       <ScoreBar score={result.score} risk={result.risk} />
       <ConfidenceMeter confidence={result.confidence ?? Math.min(99, Math.round(30 + result.score * 0.65))} risk={result.risk} />
+      {result.verification?.summary && (
+        <InfoBox color={result.risk === "UNVERIFIED" ? c.color : "#22aaff"}>
+          <Icon name={result.risk === "UNVERIFIED" ? "globe" : "info"} size={16} color={result.risk === "UNVERIFIED" ? c.color : "#22aaff"} />
+          {result.verification.summary}
+        </InfoBox>
+      )}
       {result.flags?.length > 0 && <div style={{ marginTop: 18 }}><Label>Threat Indicators ({result.flags.length})</Label>{result.flags.map((f, i) => <Flag key={i} f={f} />)}</div>}
       {result.flags?.length === 0 && (
         <InfoBox color="#00ff88">
@@ -132,6 +140,7 @@ export function ResultCard({ result }) {
 export function ThreatIntelligencePanel({ intelligence, risk }) {
   if (!intelligence) return null;
   const isSafe = risk === "SAFE";
+  const isUnverified = risk === "UNVERIFIED";
   const themeColor = RISK_CFG[risk]?.color || "#445";
 
   return (
@@ -153,9 +162,65 @@ export function ThreatIntelligencePanel({ intelligence, risk }) {
         <div style={{ fontSize: 13, color: "#8899bb", lineHeight: 1.6, fontFamily: MONO }}>{intelligence.technicalDetail || "Detailed pattern matching suggests an automated phishing campaign targeting standard authentication workflows."}</div>
       </div>
 
-      <div style={{ padding: "14px", background: isSafe ? "#00ff8810" : "#ff335510", borderLeft: `4px solid ${isSafe ? "#00ff88" : "#ff3355"}`, borderRadius: "0 8px 8px 0" }}>
-        <div style={{ fontSize: 10, color: isSafe ? "#00ff88" : "#ff3355", fontWeight: 900, letterSpacing: 2, marginBottom: 4 }}>SOC ANALYST RECOMMENDATION</div>
+      <div style={{ padding: "14px", background: isSafe ? "#00ff8810" : isUnverified ? "#22aaff10" : "#ff335510", borderLeft: `4px solid ${isSafe ? "#00ff88" : isUnverified ? "#22aaff" : "#ff3355"}`, borderRadius: "0 8px 8px 0" }}>
+        <div style={{ fontSize: 10, color: isSafe ? "#00ff88" : isUnverified ? "#22aaff" : "#ff3355", fontWeight: 900, letterSpacing: 2, marginBottom: 4 }}>SOC ANALYST RECOMMENDATION</div>
         <div style={{ fontSize: 13, color: "#dde", fontWeight: 600 }}>{intelligence.recommendation}</div>
+      </div>
+    </Card>
+  );
+}
+
+export function VerificationPanel({ verification, risk = "UNVERIFIED" }) {
+  const { dark } = useTheme();
+  if (!verification) return null;
+  const tone = RISK_CFG[risk] || RISK_CFG.UNVERIFIED;
+  const sources = verification.sources || [];
+
+  return (
+    <Card style={{ marginTop: 16, border: `1px solid ${tone.color}33`, background: dark ? "#09111f" : "#f7fbff" }}>
+      <Label>Live Verification</Label>
+      <InfoBox color={tone.color} style={{ marginTop: 0 }}>
+        <Icon name="globe" size={16} color={tone.color} />
+        {verification.summary || "Live verification details are available below."}
+      </InfoBox>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
+        <Tag color={verification.online ? "#00ff88" : "#ff3355"}>{verification.online ? "ONLINE" : "OFFLINE"}</Tag>
+        <Tag color={verification.minimumSourcesMet ? "#22aaff" : "#ffcc00"}>
+          {verification.minimumSourcesMet ? "VERIFIED" : "LIMITED"}
+        </Tag>
+        {typeof verification.coverage === "number" && <Tag color="#6644ff">Coverage {verification.coverage}%</Tag>}
+      </div>
+      {verification.dns && (
+        <div style={{ marginTop: 14, padding: "12px 14px", borderRadius: 10, border: "1px solid rgba(34,170,255,0.16)", background: dark ? "#0a0f1a" : "#ffffff" }}>
+          <div style={{ fontSize: 10, letterSpacing: 2, color: "#667", marginBottom: 6 }}>LIVE DNS</div>
+          <div style={{ fontSize: 12, color: dark ? "#d7deef" : "#1a1a38" }}>{verification.dns.detail}</div>
+          {verification.dns.addresses?.length > 0 && (
+            <div style={{ marginTop: 8, fontFamily: MONO, fontSize: 11, color: "#8899bb", wordBreak: "break-all" }}>
+              {verification.dns.addresses.join(" · ")}
+            </div>
+          )}
+        </div>
+      )}
+      <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
+        {sources.map(source => (
+          <div key={source.id || source.label} style={{ padding: "12px 14px", borderRadius: 12, border: `1px solid ${source.ok ? "#22aaff33" : "#ffcc0033"}`, background: dark ? "#0a0f1a" : "#ffffff" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 8 }}>
+              <div style={{ fontSize: 12, fontWeight: 800, color: dark ? "#eef2ff" : "#1a1a38" }}>{source.label}</div>
+              <Tag color={source.ok ? "#00ff88" : "#ffcc00"}>{source.ok ? "OK" : "FAILED"}</Tag>
+            </div>
+            <div style={{ fontSize: 12, color: dark ? "#a9b4cc" : "#526080", lineHeight: 1.6 }}>{source.detail || "No detail available."}</div>
+            {source.excerpt && (
+              <div style={{ marginTop: 8, fontSize: 11, color: "#8899bb", lineHeight: 1.6 }}>
+                {source.excerpt}
+              </div>
+            )}
+            {source.href && (
+              <a href={source.href} target="_blank" rel="noreferrer" style={{ marginTop: 10, display: "inline-flex", fontSize: 11, color: "#22aaff", textDecoration: "underline" }}>
+                Open source
+              </a>
+            )}
+          </div>
+        ))}
       </div>
     </Card>
   );

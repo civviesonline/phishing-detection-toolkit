@@ -1,5 +1,6 @@
 import React from "react";
 import { Card, Label, Tag, btnStyle } from "../shared/UI";
+import { RISK_ORDER, getRiskColor } from "../../data/constants";
 import { useAnalyst } from "../../contexts/AnalystContext";
 import { Icon } from "../shared/Icon";
 
@@ -10,11 +11,11 @@ const TYPE_META = {
   qr: { label: "QR Scanner", icon: "smartphone" }
 };
 
-const RISK_ORDER = { SAFE: 0, SUSPICIOUS: 1, DANGER: 2 };
 const ACTIONS = {
   DANGER: ["Quarantine user endpoint", "Block spoofed domain", "Refresh MFA on impacted accounts"],
   SUSPICIOUS: ["Monitor traffic for lateral movement", "Capture email headers for analysis"],
-  SAFE: ["Log this vector for auditing"]
+  SAFE: ["Log this vector for auditing"],
+  UNVERIFIED: ["Reconnect live verification", "Review source links before acting"]
 };
 
 const timeAgo = ts => {
@@ -37,9 +38,9 @@ export function MultiVectorCard() {
     : 14;
   const aggregatedRisk = vectorTimeline.reduce(
     (acc, item) => (RISK_ORDER[item.risk] > RISK_ORDER[acc] ? item.risk : acc),
-    "SAFE"
+    "UNVERIFIED"
   );
-  const aggregatedColor = aggregatedRisk === "DANGER" ? "#ff3355" : aggregatedRisk === "SUSPICIOUS" ? "#ffcc00" : "#00ff88";
+  const aggregatedColor = getRiskColor(aggregatedRisk);
   const actions = ACTIONS[aggregatedRisk];
   const pinnedState = pinned.includes("incident-card");
 
@@ -82,7 +83,7 @@ export function MultiVectorCard() {
                   <Icon name={TYPE_META[entry.type]?.icon} size={14} color="#dde" />
                   {TYPE_META[entry.type]?.label}
                 </div>
-                <Tag color={entry.risk === "SAFE" ? "#00ff88" : entry.risk === "DANGER" ? "#ff3355" : "#ffcc00"}>{entry.risk}</Tag>
+                <Tag color={getRiskColor(entry.risk)}>{entry.risk}</Tag>
               </div>
               <div style={{ fontSize: 12, color: "#8899bb" }}>{entry.summary || entry.domain || "Details logged in history"}</div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, color: "#556" }}>

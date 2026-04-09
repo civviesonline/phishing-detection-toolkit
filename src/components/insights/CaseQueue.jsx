@@ -1,5 +1,6 @@
 import React from "react";
 import { Card, Label, Tag, InfoBox, btnStyle, useTheme } from "../shared/UI";
+import { getRiskColor } from "../../data/constants";
 import { useAnalyst } from "../../contexts/AnalystContext";
 import { Icon } from "../shared/Icon";
 
@@ -66,8 +67,6 @@ const inputStyle = dark => ({
   outline: "none",
   boxSizing: "border-box"
 });
-
-const getRiskColor = risk => (risk === "DANGER" ? "#ff3355" : risk === "SUSPICIOUS" ? "#ffcc00" : "#00ff88");
 
 export function CaseQueue() {
   const { dark, isMobile } = useTheme();

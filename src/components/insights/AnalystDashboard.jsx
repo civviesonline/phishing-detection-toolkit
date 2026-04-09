@@ -1,5 +1,6 @@
 import React from "react";
 import { Card, Label, Tag, InfoBox, btnStyle } from "../shared/UI";
+import { getRiskColor } from "../../data/constants";
 import { useAnalyst } from "../../contexts/AnalystContext";
 import { Icon } from "../shared/Icon";
 
@@ -87,7 +88,7 @@ export function AnalystDashboard() {
           return (
             <div key={item.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "8px 10px", borderRadius: 6, background: "#0a0a12", border: "1px solid rgba(255,255,255,0.05)", marginBottom: 6 }}>
               <div style={{ fontSize: 12, color: "#dde", minWidth: 0, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{safeLine}</div>
-              <Tag color={item.risk === "SAFE" ? "#00ff88" : item.risk === "DANGER" ? "#ff3355" : "#ffcc00"}>{item.risk}</Tag>
+              <Tag color={getRiskColor(item.risk)}>{item.risk}</Tag>
             </div>
           );
         })}

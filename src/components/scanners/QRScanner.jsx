@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
-import { useTheme, Card, Label, Spinner, ResultCard, btnStyle, InfoBox } from "../shared/UI";
+import { useTheme, Card, Label, Spinner, ResultCard, btnStyle, InfoBox, VerificationPanel } from "../shared/UI";
 import { SitePreview } from "../shared/SitePreview";
 import { MONO, SYNE, CUSTOM_DOMAINS, CUSTOM_KW, RISK_CFG } from "../../data/constants";
-import { analyzeURL, playSound } from "../../utils/analysis";
+import { playSound } from "../../utils/analysis";
+import { analyzeUrlWithInternet, VERIFICATION_REQUIRED_MESSAGE } from "../../utils/liveVerification";
 import { Icon } from "../shared/Icon";
 
 
@@ -29,6 +30,23 @@ export function QRScanner({ onTrigger }) {
   
   const fileRef = useRef(null);
   const scannerRef = useRef(null); // Html5Qrcode instance
+
+  const analyzeDecodedValue = async (decodedText, sourceLabel) => {
+    setStatus(`Verifying ${sourceLabel} with live sources...`);
+    const analysis = await analyzeUrlWithInternet(decodedText, CUSTOM_DOMAINS, CUSTOM_KW);
+    setRes({ ...analysis, raw: decodedText });
+    onTrigger?.({
+      type: "qr",
+      risk: analysis.risk,
+      score: analysis.score,
+      domain: analysis.domain,
+      summary: analysis.flags?.[0] || `${sourceLabel} scan`,
+      detail: analysis
+    });
+    playSound(analysis.risk);
+    setStatus(analysis.risk === "UNVERIFIED" ? VERIFICATION_REQUIRED_MESSAGE : `Live verification complete for ${sourceLabel}.`);
+    return analysis;
+  };
 
   useEffect(() => {
     const handleResize = () => setIsCompact(window.innerWidth <= 900);
@@ -89,18 +107,8 @@ export function QRScanner({ onTrigger }) {
           qrbox: { width: 280, height: 280 },
           aspectRatio: 1.0
         },
-        (decodedText) => {
-          const analysis = analyzeURL(decodedText, CUSTOM_DOMAINS, CUSTOM_KW);
-          setRes({ ...analysis, raw: decodedText });
-          onTrigger?.({
-            type: "qr",
-            risk: analysis.risk,
-            score: analysis.score,
-            domain: analysis.domain,
-            summary: analysis.flags?.[0] || "QR link scan",
-            detail: analysis
-          });
-          playSound(analysis.risk);
+        async decodedText => {
+          await analyzeDecodedValue(decodedText, "camera QR");
           stopCamera();
         },
         () => {} 
@@ -121,18 +129,7 @@ export function QRScanner({ onTrigger }) {
     try {
       const html5QrCode = new window.Html5Qrcode("reader", false);
       const decodedText = await html5QrCode.scanFile(f, true);
-      const analysis = analyzeURL(decodedText, CUSTOM_DOMAINS, CUSTOM_KW);
-      setRes(analysis);
-      onTrigger?.({
-        type: "qr",
-        risk: analysis.risk,
-        score: analysis.score,
-        domain: analysis.domain,
-        summary: analysis.flags?.[0] || "QR upload scan",
-        detail: analysis
-      });
-      playSound(analysis.risk);
-      setStatus("");
+      await analyzeDecodedValue(decodedText, "uploaded QR");
     } catch (e) {
       setStatus("No QR or Barcode found in this image. Try another.");
     }
@@ -143,7 +140,7 @@ export function QRScanner({ onTrigger }) {
     if (preview) URL.revokeObjectURL(preview);
   }, [preview]);
 
-  const riskMeta = res ? (RISK_CFG[res.risk] || RISK_CFG.SAFE) : RISK_CFG.SAFE;
+  const riskMeta = res ? (RISK_CFG[res.risk] || RISK_CFG.UNVERIFIED) : RISK_CFG.UNVERIFIED;
   const detectionHighlights = res ? [
     { label: "Risk", value: res.risk, color: riskMeta.color },
     { label: "Score", value: `${res.score}/100`, color: riskMeta.color },
@@ -214,19 +211,9 @@ export function QRScanner({ onTrigger }) {
               <button
                 type="button"
                 style={{ ...btnStyle("#6644ff"), width: isCompact ? "100%" : "auto", alignSelf: isCompact ? "stretch" : "auto" }}
-                onClick={() => {
+                onClick={async () => {
                   if (!manualUrl) return;
-                  const r = analyzeURL(manualUrl, CUSTOM_DOMAINS, CUSTOM_KW);
-                  setRes(r);
-                  onTrigger?.({
-                    type: "qr",
-                    risk: r.risk,
-                    score: r.score,
-                    domain: r.domain,
-                    summary: r.flags?.[0] || "Manual QR input",
-                    detail: r
-                  });
-                  playSound(r.risk);
+                  await analyzeDecodedValue(manualUrl, "manual QR input");
                 }}
               >
                 ANALYZE INPUT
@@ -249,6 +236,7 @@ export function QRScanner({ onTrigger }) {
             {res && (
               <div style={{ animation: "fadeIn .3s ease" }}>
                 <ResultCard result={res} />
+                <VerificationPanel verification={res.verification} risk={res.risk} />
                 <div style={{ marginTop: 16, display: "flex", flexWrap: "wrap", gap: 10 }}>
                   {detectionHighlights.map(highlight => (
                     <div key={highlight.label} style={{ borderRadius: 6, border: "1px solid rgba(255,255,255,0.12)", padding: "6px 10px", fontSize: 11, color: highlight.color }}>
@@ -256,18 +244,18 @@ export function QRScanner({ onTrigger }) {
                     </div>
                   ))}
                 </div>
-                <SitePreview url={res.domain || res.raw || manualUrl} risk={res.risk} label="Decoded Preview" hint="Smart isolation preview" />
-                <div style={{ marginTop: 16, padding: "16px", background: res.risk === "SAFE" ? "#00ff880a" : "#ff33550a", border: `1px solid ${res.risk === "SAFE" ? "#00ff8833" : "#ff335533"}`, borderRadius: 8 }}>
+                <SitePreview url={res.domain || res.raw || manualUrl} risk={res.risk} verification={res.verification} label="Decoded Preview" hint={res.risk === "UNVERIFIED" ? "Verification incomplete" : "Smart isolation preview"} />
+                <div style={{ marginTop: 16, padding: "16px", background: res.risk === "SAFE" ? "#00ff880a" : res.risk === "UNVERIFIED" ? "#22aaff0a" : "#ff33550a", border: `1px solid ${res.risk === "SAFE" ? "#00ff8833" : res.risk === "UNVERIFIED" ? "#22aaff33" : "#ff335533"}`, borderRadius: 8 }}>
                   <div style={{ fontSize: 10, color: "#445", letterSpacing: 2, marginBottom: 8, fontWeight: 800 }}>EXTRACTED DATA</div>
-                  <div style={{ fontFamily: MONO, fontSize: 13, color: res.risk === "SAFE" ? "#00ff88" : "#ff8899", wordBreak: "break-all", marginBottom: 12 }}>{res.raw}</div>
+                  <div style={{ fontFamily: MONO, fontSize: 13, color: res.risk === "SAFE" ? "#00ff88" : res.risk === "UNVERIFIED" ? "#66c7ff" : "#ff8899", wordBreak: "break-all", marginBottom: 12 }}>{res.raw}</div>
                   {res.risk === "SAFE" ? (
                     <a href={res.raw.startsWith("http") ? res.raw : "https://" + res.raw} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, background: "#00ff88", color: "#000", padding: "12px", borderRadius: 6, textDecoration: "none", fontFamily: SYNE, fontWeight: 900, fontSize: 13, letterSpacing: 1, boxShadow: "0 0 20px rgba(0,255,136,0.3)" }}>
                       <Icon name="rocket" size={15} color="#000" />OPEN SECURE URL
                     </a>
                   ) : (
-                    <div style={{ padding: "10px", background: "#ff335515", borderRadius: 6, color: "#ff3355", fontSize: 11, textAlign: "center", fontWeight: 700, letterSpacing: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-                      <Icon name="triangle-alert" size={14} color="#ff3355" />
-                      DIRECT LINK DISABLED — THREAT DETECTED
+                    <div style={{ padding: "10px", background: res.risk === "UNVERIFIED" ? "#22aaff15" : "#ff335515", borderRadius: 6, color: res.risk === "UNVERIFIED" ? "#22aaff" : "#ff3355", fontSize: 11, textAlign: "center", fontWeight: 700, letterSpacing: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                      <Icon name={res.risk === "UNVERIFIED" ? "globe" : "triangle-alert"} size={14} color={res.risk === "UNVERIFIED" ? "#22aaff" : "#ff3355"} />
+                      {res.risk === "UNVERIFIED" ? "DIRECT LINK DISABLED — LIVE VERIFICATION REQUIRED" : "DIRECT LINK DISABLED — THREAT DETECTED"}
                     </div>
                   )}
                 </div>

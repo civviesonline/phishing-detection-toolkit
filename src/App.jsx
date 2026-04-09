@@ -136,26 +136,26 @@ const NAV = [
 
 const HERO_POINTS = [
   {
-    title: "Detect phishing links",
+    title: "Verify links with live evidence",
     description:
-      "Use the built-in link safety checker to inspect redirects, spoofing patterns, typosquatting, and risky protocols before someone clicks."
+      "Circadian now checks live DNS and multiple open-web searches before it will call a website safe, suspicious, or dangerous."
   },
   {
-    title: "Check suspicious emails",
+    title: "Inspect emails with URL verification",
     description:
-      "Review sender signals, urgency language, embedded URLs, and common email scam patterns from a single phishing analysis workspace."
+      "Review sender signals, urgency language, and embedded URLs while forcing every linked site through internet-backed verification first."
   },
   {
-    title: "Scan QR codes and attachments",
+    title: "Stay cautious by default",
     description:
-      "Uncover QR phishing traps, dangerous file names, and risky attachment indicators without leaving the browser."
+      "If Circadian cannot reach live sources, it stays `UNVERIFIED` instead of giving a false-safe verdict."
   }
 ];
 
 const HOW_IT_WORKS = [
   "Paste a suspicious link, email, QR code, or filename into the matching scanner.",
-  "Circadian scores the sample and highlights phishing indicators such as spoofing, shorteners, urgency language, and risky file types.",
-  "Review the safety verdict, analyst context, and training modules to decide whether to block, report, or escalate."
+  "Circadian confirms internet connectivity, gathers live evidence for websites, and only then issues a final verdict.",
+  "Review the source links, verdict, and analyst context to decide whether to block, report, or escalate."
 ];
 
 function AppShell() {
@@ -163,6 +163,7 @@ function AppShell() {
   const [tab, setTab] = useState("url");
   const [alert, setAlert] = useState(null);
   const [incidents, setIncidents] = useState([]);
+  const [browserOnline, setBrowserOnline] = useState(() => (typeof navigator !== "undefined" ? navigator.onLine !== false : true));
   const [isMobile, setIsMobile] = useState(() => (typeof window !== "undefined" ? window.innerWidth <= 900 : false));
   const [sidebarOpen, setSidebarOpen] = useState(() => (typeof window !== "undefined" ? window.innerWidth > 900 : false));
   const [showSplash, setShowSplash] = useState(true);
@@ -247,6 +248,17 @@ function AppShell() {
   }, []);
 
   useEffect(() => {
+    const sync = () => setBrowserOnline(navigator.onLine !== false);
+    sync();
+    window.addEventListener("online", sync);
+    window.addEventListener("offline", sync);
+    return () => {
+      window.removeEventListener("online", sync);
+      window.removeEventListener("offline", sync);
+    };
+  }, []);
+
+  useEffect(() => {
     setSidebarOpen(!isMobile);
   }, [isMobile]);
 
@@ -268,13 +280,13 @@ function AppShell() {
     payload => {
       const meta = {
         type: payload?.type || "scan",
-        risk: payload?.risk || "SAFE",
+        risk: payload?.risk || "UNVERIFIED",
         score: payload?.score ?? 0,
         domain: payload?.domain,
         summary: payload?.summary || payload?.detail?.domain || "",
         detail: payload
       };
-      if (meta.risk !== "SAFE") setAlert(meta.risk);
+      if (meta.risk === "SUSPICIOUS" || meta.risk === "DANGER") setAlert(meta.risk);
       setIncidents(prev => [{ risk: meta.risk, source: meta.type, ts: Date.now() }, ...prev].slice(0, 100));
       addEntry(meta);
     },
@@ -283,7 +295,7 @@ function AppShell() {
 
   const currentGroup = NAV.find(group => group.items.some(item => item.id === tab))?.group || "Detection";
   const currentLabel = NAV.flatMap(group => group.items).find(item => item.id === tab)?.label || "Circadian";
-  const productTitle = "Circadian - 24-Hour Phishing Detection Tool";
+  const productTitle = "Circadian - Internet-Verified Threat Analysis";
 
   const themeValue = useMemo(() => ({ dark, setDark, isMobile }), [dark, isMobile]);
 
@@ -403,8 +415,22 @@ function AppShell() {
               </div>
               <h1 style={{ fontSize: heroTitleSize, fontWeight: 950, marginBottom: 16, letterSpacing: -2, color: dark ? "#fff" : "#1a1a38", maxWidth: 780 }}>{productTitle}</h1>
               <p style={{ margin: "0 0 18px", maxWidth: 760, lineHeight: 1.75, color: dark ? "#a9b4cc" : "#4a5578", fontSize: isMobile ? 15 : 16 }}>
-                Circadian helps teams detect phishing links, analyze suspicious emails, scan QR codes, and review risky attachments from one browser-based security workspace.
+                Circadian helps teams verify suspicious websites, emails, and QR codes with live internet evidence so random domains cannot slip through as safe while the app is offline.
               </p>
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 10, flexWrap: "wrap", maxWidth: "100%", marginBottom: 16, padding: "12px 16px", borderRadius: 16, border: `1px solid ${dark ? "#21405f" : "#b8d7f5"}`, background: dark ? "linear-gradient(135deg, rgba(34,170,255,0.14), rgba(255,255,255,0.02))" : "linear-gradient(135deg, rgba(34,170,255,0.12), rgba(255,255,255,0.95))", color: dark ? "#dfeeff" : "#18456b", fontSize: 12, fontWeight: 700, lineHeight: 1.6 }}>
+                <Icon name="globe" size={16} color="#22aaff" />
+                Live-first mode is active: Circadian now withholds website verdicts until it can verify the destination on the internet.
+              </div>
+              <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
+                <div style={{ display: "inline-flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 999, border: `1px solid ${browserOnline ? (dark ? "#00ff8833" : "#9ee7c1") : (dark ? "#ffcc0033" : "#f5d57a")}`, background: browserOnline ? (dark ? "#00180f" : "#effcf4") : (dark ? "#1a1405" : "#fff9e8"), color: browserOnline ? "#00ff88" : "#ffcc00", fontSize: 11, fontWeight: 800, letterSpacing: 1.2, textTransform: "uppercase" }}>
+                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: browserOnline ? "#00ff88" : "#ffcc00", boxShadow: `0 0 14px ${browserOnline ? "#00ff88" : "#ffcc00"}` }} />
+                  {browserOnline ? "Browser Online" : "Browser Offline"}
+                </div>
+                <div style={{ display: "inline-flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 999, border: `1px solid ${dark ? "#2a2a50" : "#dde0f0"}`, background: dark ? "rgba(255,255,255,0.02)" : "#ffffff", color: dark ? "#dfe5f4" : "#2a3154", fontSize: 11, fontWeight: 800, letterSpacing: 1.2, textTransform: "uppercase" }}>
+                  <Icon name="shield-check" size={14} color="#22aaff" />
+                  Internet Required For Final Verdicts
+                </div>
+              </div>
               <div style={{ display: "inline-flex", alignItems: "center", gap: 10, flexWrap: "wrap", maxWidth: "100%", padding: "10px 14px", borderRadius: 999, border: `1px solid ${dark ? "#2a2a50" : "#dde0f0"}`, background: dark ? "rgba(255,255,255,0.02)" : "#ffffff", color: dark ? "#dfe5f4" : "#2a3154", fontSize: 12, fontWeight: 800, letterSpacing: 1.2, textTransform: "uppercase" }}>
                 <span style={{ color: "#ff3355" }}>Active Module</span>
                 <span>{currentGroup}</span>
@@ -413,6 +439,28 @@ function AppShell() {
               </div>
               <div style={{ height: 4, width: heroUnderlineWidth, background: "#ff3355", borderRadius: 2 }} />
             </header>
+
+            {!browserOnline && (
+              <section
+                aria-label="Offline warning"
+                style={{
+                  marginBottom: 28,
+                  padding: isMobile ? "16px 16px 18px" : "18px 20px 20px",
+                  borderRadius: 18,
+                  border: `1px solid ${dark ? "#5e4b14" : "#f0d27c"}`,
+                  background: dark ? "linear-gradient(135deg, rgba(255,204,0,0.12), rgba(255,255,255,0.02))" : "linear-gradient(135deg, rgba(255,224,120,0.35), rgba(255,255,255,0.96))",
+                  boxShadow: dark ? "0 14px 30px rgba(0,0,0,0.18)" : "0 12px 26px rgba(98,82,27,0.08)"
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                  <Icon name="triangle-alert" size={18} color="#ffcc00" />
+                  <div style={{ fontSize: 13, fontWeight: 900, letterSpacing: 2, color: "#ffcc00", textTransform: "uppercase" }}>Offline Mode Detected</div>
+                </div>
+                <div style={{ fontSize: 14, lineHeight: 1.7, color: dark ? "#f5e6a2" : "#5f4b12", maxWidth: 820 }}>
+                  Circadian will still inspect local patterns, but it will keep verdicts unverified until the browser reconnects and live verification can complete.
+                </div>
+              </section>
+            )}
 
             {tab === "url" && (
               <section

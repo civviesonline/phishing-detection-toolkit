@@ -7,7 +7,7 @@ const LEGACY_STORAGE_KEY = "phishguard-history";
 const LEGACY_PINS_KEY = "phishguard-pins";
 const LEGACY_CASES_KEY = "phishguard-cases";
 const DEFAULT_PINS = ["attack-feed", "incident-card", "caseboard"];
-const RISK_ORDER = { SAFE: 0, SUSPICIOUS: 1, DANGER: 2 };
+const RISK_ORDER = { UNVERIFIED: 0, SAFE: 1, SUSPICIOUS: 2, DANGER: 3 };
 const PRIORITY_ORDER = { P1: 0, P2: 1, P3: 2, P4: 3 };
 const DEFAULT_CASE_STATS = { active: 0, new: 0, investigating: 0, contained: 0, closed: 0 };
 
@@ -80,7 +80,7 @@ const makeCaseRecord = (entry, mode = "manual") => {
     lastSignalAt: now,
     title: makeCaseTitle(entry),
     type: entry?.type || "scan",
-    risk: entry?.risk || "SAFE",
+    risk: entry?.risk || "UNVERIFIED",
     score: entry?.score ?? 0,
     domain: entry?.domain || entry?.filename || "",
     summary: trimValue(entry?.summary || entry?.domain || entry?.filename || entry?.detail?.from || "Signal captured"),
@@ -115,7 +115,7 @@ const upsertCase = (cases, entry, mode = "manual") => {
       updatedAt: Date.now(),
       lastSignalAt: Date.now(),
       title: makeCaseTitle(entry),
-      risk: strongerRisk(item.risk || "SAFE", entry?.risk || "SAFE"),
+      risk: strongerRisk(item.risk || "UNVERIFIED", entry?.risk || "UNVERIFIED"),
       score: Math.max(item.score ?? 0, entry?.score ?? 0),
       domain: entry?.domain || entry?.filename || item.domain || "",
       summary: trimValue(entry?.summary || item.summary || entry?.domain || entry?.filename || "Signal captured"),

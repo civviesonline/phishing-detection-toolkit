@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useTheme, Card, Label, TrafficLight, ScoreBar, Tag, Flag, InfoBox, Spinner, btnStyle, ThreatIntelligencePanel } from "../shared/UI";
-import { MONO, CUSTOM_DOMAINS, CUSTOM_KW, RISK_CFG } from "../../data/constants";
-import { analyzeEmail, playSound } from "../../utils/analysis";
+import { MONO, CUSTOM_DOMAINS, CUSTOM_KW, RISK_CFG, getRiskColor } from "../../data/constants";
+import { playSound } from "../../utils/analysis";
+import { analyzeEmailWithInternet } from "../../utils/liveVerification";
 import { buildMailFields, cleanDetectedText } from "../../utils/mailInput";
 import { Icon } from "../shared/Icon";
 
@@ -56,8 +57,6 @@ const inputStyle = dark => ({
   boxSizing: "border-box"
 });
 
-const getRiskColor = risk => (risk === "DANGER" ? "#ff3355" : risk === "SUSPICIOUS" ? "#ffcc00" : "#00ff88");
-
 export function MailReader({ onTrigger }) {
   const { dark, isMobile } = useTheme();
   const [pasteInput, setPasteInput] = useState("");
@@ -72,6 +71,7 @@ export function MailReader({ onTrigger }) {
   const [cameraOn, setCameraOn] = useState(false);
   const [previewUrl, setPreviewUrl] = useState("");
   const [ocrProgress, setOcrProgress] = useState("");
+  const [analysisBusy, setAnalysisBusy] = useState(false);
 
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -92,12 +92,13 @@ export function MailReader({ onTrigger }) {
     return next;
   };
 
-  const analyzeFields = (payload, sourceLabel = intakeSource, sourceRaw = sourceText) => {
+  const analyzeFields = async (payload, sourceLabel = intakeSource, sourceRaw = sourceText) => {
     const nextPayload = payload || { from, subject, body };
     if (!nextPayload.from.trim() && !nextPayload.subject.trim() && !nextPayload.body.trim()) return;
 
+    setAnalysisBusy(true);
     try {
-      const result = analyzeEmail(nextPayload, CUSTOM_DOMAINS, CUSTOM_KW);
+      const result = await analyzeEmailWithInternet(nextPayload, CUSTOM_DOMAINS, CUSTOM_KW);
       setRes(result);
       onTrigger?.({
         type: "email",
@@ -111,8 +112,8 @@ export function MailReader({ onTrigger }) {
       setStatus(`Mail analysis completed from ${sourceLabel}.`);
     } catch (error) {
       setRes({
-        score: 100,
-        risk: "DANGER",
+        score: 0,
+        risk: "UNVERIFIED",
         keywords: [],
         urgency: [],
         linkCount: 0,
@@ -121,13 +122,24 @@ export function MailReader({ onTrigger }) {
         senderFlags: ["Analysis failed — check the imported message text"],
         hiddenRedirects: 0,
         deobEscalations: 0,
+        verification: {
+          mode: "email",
+          checkedAt: new Date().toISOString(),
+          online: false,
+          minimumSourcesMet: false,
+          coverage: 0,
+          summary: "Circadian could not finish the live verification pass for this message.",
+          sources: []
+        },
         intelligence: {
-          tactic: "Analysis Failure",
+          tactic: "Verification Failure",
           intent: "Unknown",
-          recommendation: "Retry the import or clean up the captured text before analyzing again.",
+          recommendation: "Retry the import with internet access and review the parsed fields before trusting the verdict.",
           technicalDetail: String(error?.message || error)
         }
       });
+    } finally {
+      setAnalysisBusy(false);
     }
   };
 
@@ -268,7 +280,7 @@ export function MailReader({ onTrigger }) {
           />
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
             <button type="button" style={btnStyle("#22aaff")} onClick={() => ingestText(pasteInput, "pasted message")}>IMPORT PASTE</button>
-            <button type="button" style={btnStyle("#ff9900")} onClick={() => analyzeImportedText(pasteInput, "pasted message")}>ANALYZE PASTE</button>
+            <button type="button" style={btnStyle("#ff9900")} onClick={() => analyzeImportedText(pasteInput, "pasted message")}>{analysisBusy ? "VERIFYING..." : "ANALYZE PASTE"}</button>
           </div>
           <InfoBox color="#22aaff" style={{ marginTop: 12 }}>
             Paste works for raw headers, copied inbox text, or full message bodies from desktop and mobile.
@@ -341,7 +353,7 @@ export function MailReader({ onTrigger }) {
         />
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
           <button type="button" style={btnStyle("#22aaff")} onClick={() => ingestText(sourceText, "edited source text")}>RE-PARSE TEXT</button>
-          <button type="button" style={btnStyle("#ff9900")} onClick={() => analyzeImportedText(sourceText, intakeSource || "edited source text")}>ANALYZE EXTRACTED TEXT</button>
+          <button type="button" style={btnStyle("#ff9900")} onClick={() => analyzeImportedText(sourceText, intakeSource || "edited source text")}>{analysisBusy ? "VERIFYING..." : "ANALYZE EXTRACTED TEXT"}</button>
         </div>
       </Card>
 
@@ -358,7 +370,7 @@ export function MailReader({ onTrigger }) {
           onChange={e => { setBody(e.target.value); setRes(null); }}
         />
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
-          <button type="button" style={btnStyle("#ff9900")} onClick={() => analyzeFields()}>ANALYZE MESSAGE</button>
+          <button type="button" style={btnStyle("#ff9900")} onClick={() => analyzeFields()}>{analysisBusy ? "VERIFYING..." : "ANALYZE MESSAGE"}</button>
           <button
             type="button"
             style={{ ...btnStyle("#1a1a30"), boxShadow: "none", border: "1px solid #2a2a50" }}
@@ -388,12 +400,24 @@ export function MailReader({ onTrigger }) {
           {status}
         </InfoBox>
       )}
+      {analysisBusy && (
+        <InfoBox color="#22aaff">
+          <Spinner color="#22aaff" size={14} />
+          Collecting live search and DNS evidence before Circadian issues the final verdict…
+        </InfoBox>
+      )}
 
       {res && (
         <div style={{ animation: "fadeIn .3s ease" }}>
           <Card border={RISK_CFG[res.risk]?.color + "55"}>
             <TrafficLight risk={res.risk} />
             <ScoreBar score={res.score ?? 0} risk={res.risk} />
+            {res.verification?.summary && (
+              <InfoBox color="#22aaff">
+                <Icon name="globe" size={16} color="#22aaff" />
+                {res.verification.summary}
+              </InfoBox>
+            )}
             <ThreatIntelligencePanel intelligence={res.intelligence} risk={res.risk} />
 
             <div style={{ display: "flex", gap: 12, marginTop: 18, flexWrap: "wrap" }}>
@@ -430,6 +454,7 @@ export function MailReader({ onTrigger }) {
                           ))}
                         </div>
                       )}
+                      {link.verification?.summary && <div style={{ marginTop: 8, fontSize: 11, color: "#6677aa" }}>{link.verification.summary}</div>}
                     </div>
                   );
                 })}

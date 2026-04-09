@@ -9,7 +9,7 @@ const PREVIEW_SERVICES = [
   { label: "PagePeeker", build: href => `https://free.pagepeeker.com/v2/thumbs.php?size=l&url=${encodeURIComponent(href)}` }
 ];
 
-export function SitePreview({ url, risk = "SAFE", label = "Site Preview", hint }) {
+export function SitePreview({ url, risk = "SAFE", label = "Site Preview", hint, verification }) {
   const [stage, setStage] = useState("loading");
   const [index, setIndex] = useState(0);
   const [attempts, setAttempts] = useState(0);
@@ -36,8 +36,8 @@ export function SitePreview({ url, risk = "SAFE", label = "Site Preview", hint }
     return PREVIEW_SERVICES.map(service => ({ label: service.label, src: service.build(safeHref) }));
   }, [safeHref]);
 
-  const borderColor = risk === "DANGER" ? "#ff335533" : risk === "SUSPICIOUS" ? "#ffcc0033" : "#00ff8833";
-  const glowColor = risk === "DANGER" ? "#ff335544" : risk === "SUSPICIOUS" ? "#ffcc0044" : "#00ff8844";
+  const borderColor = risk === "DANGER" ? "#ff335533" : risk === "SUSPICIOUS" ? "#ffcc0033" : risk === "UNVERIFIED" ? "#22aaff33" : "#00ff8833";
+  const glowColor = risk === "DANGER" ? "#ff335544" : risk === "SUSPICIOUS" ? "#ffcc0044" : risk === "UNVERIFIED" ? "#22aaff44" : "#00ff8844";
 
   const nextPreview = () => {
     if (!previewSources.length) return;
@@ -107,9 +107,12 @@ export function SitePreview({ url, risk = "SAFE", label = "Site Preview", hint }
       </div>
       <div className="pg-row" style={{ marginTop: 10, fontSize: 11, color: "#8899bb", display: "flex", justifyContent: "space-between" }}>
         <span style={{ color: glowColor.replace(/44$/, "ff"), display: "inline-flex", alignItems: "center", gap: 6 }}>
-          <Icon name={risk === "SAFE" ? "check-circle" : "triangle-alert"} size={13} color={glowColor.replace(/44$/, "ff")} />
-          {risk === "SAFE" ? "Verified" : "Caution"}
+          <Icon name={risk === "SAFE" ? "check-circle" : risk === "UNVERIFIED" ? "globe" : "triangle-alert"} size={13} color={glowColor.replace(/44$/, "ff")} />
+          {risk === "SAFE" ? "Verified" : risk === "UNVERIFIED" ? "Verification required" : "Caution"}
         </span>
+        {verification?.minimumSourcesMet === false && (
+          <span style={{ color: "#22aaff" }}>Live evidence incomplete</span>
+        )}
         <a href={safeHref} target="_blank" rel="noreferrer" style={{ fontSize: 11, textDecoration: "underline", color: "#22aaff" }}>
           Open URL
         </a>

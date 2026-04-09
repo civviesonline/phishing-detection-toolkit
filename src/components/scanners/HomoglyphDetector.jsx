@@ -2,11 +2,12 @@ import React, { useState } from "react";
 import { useTheme, Card, Label, TrafficLight, ScoreBar, Tag, Flag, btnStyle } from "../shared/UI";
 import { MONO, RISK_CFG } from "../../data/constants";
 import { analyzeHomoglyph, playSound } from "../../utils/analysis";
+import { gateLocalVerdict } from "../../utils/liveVerification";
 
 export function HomoglyphDetector() {
   const { dark } = useTheme();
   const [dom, setDom] = useState(""), [res, setRes] = useState(null);
-  const scan = () => { if (!dom.trim()) return; const r = analyzeHomoglyph(dom.trim()); setRes(r); playSound(r.risk); };
+  const scan = async () => { if (!dom.trim()) return; const r = await gateLocalVerdict(() => analyzeHomoglyph(dom.trim()), "homoglyph analysis"); setRes(r); playSound(r.risk); };
   return (
     <div>
       <Label>Identify Unicode lookalike (IDN homograph) attacks</Label>
@@ -15,12 +16,13 @@ export function HomoglyphDetector() {
         <button style={btnStyle("#6644ff")} onClick={scan}>DETECT HOMOGLYPHS</button>
       </div>
       {res && <div style={{ animation: "fadeIn .3s ease" }}>
-        <Card border={RISK_CFG[res.risk].color + "55"} style={{ marginTop: 16 }}>
+        <Card border={(RISK_CFG[res.risk] || RISK_CFG.UNVERIFIED).color + "55"} style={{ marginTop: 16 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <TrafficLight risk={res.risk} />
             <div style={{ textAlign: "right" }}><div style={{ fontFamily: MONO, color: "#445", fontSize: 10, letterSpacing: 2 }}>NORMALIZED</div><Tag color="#22aaff">{res.normalized || "none"}</Tag></div>
           </div>
           <ScoreBar score={res.score} risk={res.risk} />
+          {res.verification?.summary && <div style={{ marginTop: 10, fontSize: 12, color: "#6677aa" }}>{res.verification.summary}</div>}
           {res.flags.length > 0 && <div style={{ marginTop: 18 }}><Label>Threat Indicators</Label>{res.flags.map((f, i) => <Flag key={i} f={f} color={res.risk === "DANGER" ? "#ff3355" : "#ffcc00"} />)}</div>}
           {res.glyphsFound?.length > 0 && <div style={{ marginTop: 14 }}><Label>Detected Substitutions</Label><div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(80px, 1fr))", gap: 6 }}>{res.glyphsFound.map((g, i) => <div key={i} style={{ padding: "8px", background: "#0d0d1e", border: "1px solid #1a1a30", borderRadius: 4, textAlign: "center", fontSize: 13 }}><span style={{ color: "#ff3355" }}>{g.original}</span> <span style={{ color: "#445" }}>→</span> <span style={{ color: "#00ff88" }}>{g.ascii}</span></div>)}</div></div>}
         </Card>
